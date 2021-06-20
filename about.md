@@ -4,12 +4,8 @@ title: About
 permalink: /about/
 ---
 
-Some information about you!
-
-### More Information
-
-A place to include any other types of information that you'd like to include about yourself.
+Skilled full stack .NET developer with an outstanding history of performance in application design, development, and implementation; possess 5 years of experience. 
 
 ### Contact me
 
-[email@domain.com](mailto:email@domain.com)
+[yoursanjeev0@gmail.com](mailto:yoursanjeev0@gmail.com)
