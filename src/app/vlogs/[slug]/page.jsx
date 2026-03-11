@@ -2,8 +2,9 @@ import { getSortedVlogsData, getVlogData } from '@/lib/vlogs';
 import Link from 'next/link';
 
 export async function generateMetadata({ params }) {
-    // Read route params
-    const vlogData = await getVlogData(params.slug);
+    // Read route params (in Next.js 15, params is a promise)
+    const resolvedParams = await params;
+    const vlogData = await getVlogData(resolvedParams.slug);
     return {
       title: `${vlogData.title} | Sanjeev Bhusal`,
       description: vlogData.description,
@@ -11,7 +12,9 @@ export async function generateMetadata({ params }) {
   }
 
 export default async function VlogPost({ params }) {
-  const vlogData = await getVlogData(params.slug);
+  // In Next.js 15, params is a promise that must be awaited
+  const resolvedParams = await params;
+  const vlogData = await getVlogData(resolvedParams.slug);
 
   return (
     <article className="pt-40 max-w-[800px] mx-auto px-[5%] pb-32">
