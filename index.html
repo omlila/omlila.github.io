@@ -1,18 +1,144 @@
----
-layout: default
----
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sanjeev Bhusal | Software & AI Engineer</title>
+    <meta name="description" content="Portfolio of Sanjeev Bhusal, a Software Development and AI Engineer focused on building intelligent and beautiful digital experiences.">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
 
-<div class="posts">
-  {% for post in site.posts %}
-    <article class="post">
+    <header id="header">
+        <nav>
+            <a href="index.html" class="logo">Sanjeev.</a>
+            <ul class="nav-links">
+                <li><a href="#about">About</a></li>
+                <li><a href="#projects">Work</a></li>
+                <li><a href="vlogs.html">Vlogs</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
 
-      <h1><a href="{{ site.baseurl }}{{ post.url }}">{{ post.title }}</a></h1>
+    <main>
+        <section class="hero">
+            <div class="hero-glow"></div>
+            <div class="hero-content">
+                <div class="hero-badge reveal">Status: Building the future 🚀</div>
+                <h1 class="reveal" style="transition-delay: 100ms;">
+                    Hi, I'm Sanjeev.<br>
+                    <span class="text-gradient">Software & AI Engineer</span>
+                </h1>
+                <p class="reveal" style="transition-delay: 200ms;">
+                    I specialize in designing and developing state-of-the-art software systems. 
+                    From scalable backend architectures to intelligent AI integrations, I bring ideas to reality.
+                </p>
+                <div class="cta-group reveal" style="transition-delay: 300ms;">
+                    <a href="#projects" class="btn btn-primary">View My Work</a>
+                    <a href="vlogs.html" class="btn btn-secondary">Watch My Vlogs</a>
+                </div>
+            </div>
+        </section>
 
-      <div class="entry">
-        {{ post.excerpt }}
-      </div>
+        <section id="about" class="reveal">
+            <h2 class="section-title">About Me</h2>
+            <div class="glass-card">
+                <p style="font-size: 1.1rem; color: var(--text-muted); text-align: center; max-width: 800px; margin: 0 auto;">
+                    I'm a passionate engineer currently based in the USA. I love solving complex problems using modern technology stacks. My background spans full-stack development, artificial intelligence, and cloud infrastructure. When I'm not coding, I'm usually documenting my journey through my vlogs.
+                </p>
+            </div>
+        </section>
 
-      <a href="{{ site.baseurl }}{{ post.url }}" class="read-more">Read More</a>
-    </article>
-  {% endfor %}
-</div>
+        <section id="projects">
+            <h2 class="section-title reveal">Featured Projects</h2>
+            <div class="projects-grid">
+                
+                <!-- Project 1 -->
+                <div class="glass-card project-card reveal">
+                    <div class="project-image">
+                        <!-- Abstract placeholder or gradient will show from css -->
+                    </div>
+                    <div class="project-content">
+                        <div class="project-tags">
+                            <span class="tag">AI</span>
+                            <span class="tag">Python</span>
+                        </div>
+                        <h3>Onyx AI Platform</h3>
+                        <p>A sophisticated AI platform running locally to process complex agentic workflows with seamless UI integration.</p>
+                        <a href="https://github.com/omlila" target="_blank" class="project-link">
+                            View on GitHub 
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Project 2 -->
+                <div class="glass-card project-card reveal" style="transition-delay: 100ms;">
+                    <div class="project-image"></div>
+                    <div class="project-content">
+                        <div class="project-tags">
+                            <span class="tag">Swift</span>
+                            <span class="tag">CoreML</span>
+                        </div>
+                        <h3>AI Jam Band</h3>
+                        <p>An interactive iOS application under Omlila Labs allowing users to create music interactively using CoreML.</p>
+                        <a href="https://github.com/omlila" target="_blank" class="project-link">
+                            View on GitHub 
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Project 3 -->
+                <div class="glass-card project-card reveal" style="transition-delay: 200ms;">
+                    <div class="project-image"></div>
+                    <div class="project-content">
+                        <div class="project-tags">
+                            <span class="tag">Automation</span>
+                            <span class="tag">Finance</span>
+                        </div>
+                        <h3>Portfolio Automation</h3>
+                        <p>A scheduled autonomous agent tracking stock portfolios and providing AI-driven buy/sell recommendations.</p>
+                        <a href="https://github.com/omlila" target="_blank" class="project-link">
+                            View on GitHub 
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+        
+        <section id="contact" class="reveal">
+            <h2 class="section-title">Get In Touch</h2>
+            <div class="glass-card" style="text-align: center;">
+                <h3 style="margin-bottom: 1rem; font-size: 2rem;">Let's build something amazing together.</h3>
+                <p style="color: var(--text-muted); margin-bottom: 2rem;">I'm always open to discussing new projects, creative ideas or opportunities to be part of your visions.</p>
+                <a href="mailto:hello@example.com" class="btn btn-primary">Say Hello</a>
+            </div>
+        </section>
+
+    </main>
+
+    <footer>
+        <div class="social-links">
+            <a href="https://github.com/omlila" target="_blank" aria-label="GitHub">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+            </a>
+            <a href="#" target="_blank" aria-label="LinkedIn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
+            </a>
+            <a href="#" target="_blank" aria-label="Twitter">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"></path></svg>
+            </a>
+            <a href="vlogs.html" aria-label="YouTube">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33 2.78 2.78 0 0 0 1.94 2c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.33 29 29 0 0 0-.46-5.33z"></path><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon></svg>
+            </a>
+        </div>
+        <p>&copy; 2026 Sanjeev Bhusal. Designed and built with ❤️.</p>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
