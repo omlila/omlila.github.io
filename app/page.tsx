@@ -10,7 +10,7 @@ export default function Home() {
       <nav className="fixed top-0 w-full z-50 glass border-b border-stone-800 backdrop-blur-md bg-stone-950/50">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Globe2 className="w-8 h-8 text-moss-400" />
+            <Image src="/logo.png" alt="Omlila Logo" width={36} height={36} className="rounded-xl overflow-hidden shadow-md shadow-moss-400/20" />
             <span className="text-xl font-bold tracking-tight text-white">Omlila<span className="text-moss-500">.</span></span>
           </div>
           <div className="hidden md:flex items-center gap-8 text-sm font-medium">
