@@ -3,15 +3,15 @@
 import Link from 'next/link';
 import { useState } from 'react';
 
-export default function FeatureRequestPage() {
+export default function FeedbackPage() {
     const [app, setApp] = useState("Omlila TV");
     const [message, setMessage] = useState("");
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         
-        const subject = encodeURIComponent(`Feature Request for ${app}`);
-        const body = encodeURIComponent(`App: ${app}\n\nFeature Details:\n${message}`);
+        const subject = encodeURIComponent(`Feedback for ${app}`);
+        const body = encodeURIComponent(`App: ${app}\n\nFeedback Details:\n${message}`);
         
         window.location.href = `mailto:s360@duck.com?subject=${subject}&body=${body}`;
     };
@@ -22,12 +22,12 @@ export default function FeatureRequestPage() {
                 <Link href="/" className="text-moss-500 hover:text-moss-400 mb-8 inline-block transition-colors no-underline">
                     &larr; Back to Home
                 </Link>
-                <h1 className="text-4xl font-black text-white mb-2">Feature Request</h1>
+                <h1 className="text-4xl font-black text-white mb-2">Feedback</h1>
                 <p className="text-stone-500 mb-8">Help us improve our applications</p>
 
                 <section className="space-y-6">
                     <p>
-                        Have an idea to make our apps better? Submit your feature request below. 
+                        Have an idea or feedback to make our apps better? Submit it below. 
                         Clicking submit will open your default email app.
                     </p>
 
@@ -50,7 +50,7 @@ export default function FeatureRequestPage() {
                         </div>
 
                         <div>
-                            <label htmlFor="message" className="block text-sm font-medium text-stone-400 mb-2">Feature Details</label>
+                            <label htmlFor="message" className="block text-sm font-medium text-stone-400 mb-2">Feedback Details</label>
                             <textarea 
                                 id="message" 
                                 name="message" 
@@ -58,7 +58,7 @@ export default function FeatureRequestPage() {
                                 onChange={(e) => setMessage(e.target.value)}
                                 rows={5}
                                 className="w-full bg-stone-900 border border-stone-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-moss-500"
-                                placeholder="Describe the feature you'd like to see..."
+                                placeholder="Describe the feedback you'd like to share..."
                                 required
                             ></textarea>
                         </div>
