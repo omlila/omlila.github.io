@@ -1,0 +1,102 @@
+name: omlila-gen-monorepo
+
+services:
+  # 1. Video Studio Web App (React 19 + Vite)
+  web:
+    build:
+      context: .
+      dockerfile: apps/video-gen/Dockerfile
+    container_name: omlila_video_gen_web
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # 2. Redis Persistence Hub
+  redis:
+    image: redis:7-alpine
+    container_name: nep_lyricist_redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+    restart: always
+
+  # 3. Nepali Lyricist FastAPI REST Backend (For Video Studio integration)
+  lyricist-api:
+    build:
+      context: services/nep-lyricist
+      dockerfile: Dockerfile
+    container_name: nep_lyricist_api
+    command: uvicorn factory.api:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./services/nep-lyricist:/app
+      - ./services/nep-lyricist/data:/app/data
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PYTHONPATH=/app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - app-network
+
+  # 4. Nepali Lyricist Scraping & AI Data Factory Worker
+  lyricist-factory:
+    build:
+      context: services/nep-lyricist
+      dockerfile: Dockerfile
+    container_name: nep_lyricist_factory
+    command: python main.py
+    volumes:
+      - ./services/nep-lyricist:/app
+      - ./services/nep-lyricist/data:/app/data
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PYTHONPATH=/app
+      - DOCKER_CONTAINER=true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - app-network
+
+  # 5. Streamlit Interactive Evaluation Playground
+  lyricist-playground:
+    build:
+      context: services/nep-lyricist
+      dockerfile: Dockerfile
+    container_name: nep_lyricist_playground
+    command: streamlit run factory/playground_app.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./services/nep-lyricist:/app
+      - ./services/nep-lyricist/data:/app/data
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PYTHONPATH=/app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  redis_data:

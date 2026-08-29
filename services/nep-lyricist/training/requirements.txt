@@ -1,0 +1,8 @@
+transformers>=4.45.0
+datasets
+peft
+trl
+accelerate
+tokenizers
+huggingface_hub
+python-dotenv

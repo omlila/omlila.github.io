@@ -1,28 +1,20 @@
 {
-  "name": "omlila",
-  "version": "0.1.0",
+  "name": "omlila-monorepo",
   "private": true,
+  "version": "1.0.0",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "lucide-react": "^0.577.0",
-    "next": "16.1.6",
-    "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:studio": "pnpm --filter video-gen dev",
+    "dev:api": "cd services/nep-lyricist && uvicorn factory.api:app --reload --port 8000",
+    "dev:lyricist": "cd services/nep-lyricist && python3 factory/playground_app.py",
+    "dev:all": "concurrently \"pnpm dev:web\" \"pnpm dev:studio\" \"pnpm dev:api\"",
+    "build:studio": "pnpm --filter video-gen build",
+    "build:web": "pnpm --filter web build",
+    "build": "pnpm build:studio && pnpm build:web && mkdir -p apps/web/out/studio && cp -r apps/video-gen/dist/* apps/web/out/studio/ && rm -rf out && cp -r apps/web/out out && touch out/.nojekyll",
+    "lint": "pnpm --filter \"./apps/*\" lint"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "babel-plugin-react-compiler": "1.0.0",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "concurrently": "^9.1.2"
   }
 }
