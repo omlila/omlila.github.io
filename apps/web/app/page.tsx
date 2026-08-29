@@ -15,7 +15,7 @@ export default function Home() {
           </div>
           <div className="hidden md:flex items-center gap-8 text-sm font-medium">
             <a href="#products" className="hover:text-white transition-colors">Products</a>
-            <a href="/studio/" className="text-moss-400 hover:text-moss-300 font-semibold transition-colors flex items-center gap-1.5">
+            <a href="/studio/video/" className="text-moss-400 hover:text-moss-300 font-semibold transition-colors flex items-center gap-1.5">
               <span>Video Studio</span>
               <span className="px-1.5 py-0.5 text-[10px] rounded bg-moss-500/20 text-moss-300 font-mono">4K WebCodecs</span>
             </a>
@@ -53,7 +53,7 @@ export default function Home() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-5">
-            <Link href="/studio/" className="w-full sm:w-auto px-8 py-4 bg-moss-500 hover:bg-moss-400 text-stone-950 rounded-full font-bold text-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-moss-500/20">
+            <Link href="/studio/video/" className="w-full sm:w-auto px-8 py-4 bg-moss-500 hover:bg-moss-400 text-stone-950 rounded-full font-bold text-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-moss-500/20">
               <Play className="w-5 h-5 fill-current" /> Launch Video Studio (Web)
             </Link>
             <a href="#products" className="w-full sm:w-auto px-8 py-4 glass hover:bg-stone-800/50 rounded-full font-bold text-lg transition-all flex items-center justify-center gap-2">
@@ -103,7 +103,7 @@ export default function Home() {
                   </div>
                 </div>
                 <Link
-                  href="/studio/"
+                  href="/studio/video/"
                   className="px-8 py-4 bg-moss-500 hover:bg-moss-400 text-stone-950 font-bold rounded-full text-base transition-all inline-flex items-center gap-2 shadow-lg shadow-moss-500/20"
                 >
                   <Play className="w-5 h-5 fill-current" />

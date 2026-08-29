@@ -11,7 +11,7 @@
     "dev:all": "concurrently \"pnpm dev:web\" \"pnpm dev:studio\" \"pnpm dev:api\"",
     "build:studio": "pnpm --filter video-gen build",
     "build:web": "pnpm --filter web build",
-    "build": "pnpm build:studio && pnpm build:web && mkdir -p apps/web/out/studio && cp -r apps/video-gen/dist/* apps/web/out/studio/ && rm -rf out && cp -r apps/web/out out && touch out/.nojekyll",
+    "build": "pnpm build:studio && pnpm build:web && mkdir -p apps/web/out/studio/video && cp -r apps/video-gen/dist/* apps/web/out/studio/video/ && echo '<!DOCTYPE html><html><head><meta http-equiv=\"refresh\" content=\"0; url=/studio/video/\"><title>Redirecting to Video Studio</title></head><body><script>window.location.replace(\"/studio/video/\");</script><p>Redirecting to <a href=\"/studio/video/\">Omlila Video Studio</a>...</p></body></html>' > apps/web/out/studio/index.html && rm -rf out && cp -r apps/web/out out && touch out/.nojekyll",
     "lint": "pnpm --filter \"./apps/*\" lint"
   },
   "devDependencies": {
