@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 
 import { getMediaFile, getAudioFile, saveAudioFile, saveMediaFile } from './utils/mediaStore';
+import { registerStudioBridge, notifyStudioStateChange } from './automation/omlilaStudioBridge';
 
 export default function App() {
   const isLyricistEnabled = import.meta.env.VITE_ENABLE_AI_LYRICIST === 'true';
@@ -407,10 +408,82 @@ export default function App() {
   };
 
   useEffect(() => {
+    const bridge = registerStudioBridge({
+      getState: () => ({
+        lyrics,
+        lrcText: lrcInputText,
+        aspectRatio,
+        styleConfig,
+        workspaceTheme,
+        mediaItems,
+        bgMediaUrl,
+        isPlaying,
+        currentTime,
+        duration,
+        bpm: beatSync.bpm,
+        beatStrength: beatSync.beatStrength,
+        isReady: true,
+      }),
+      setLyrics: (lrc) => handleLrcTextChange(lrc),
+      setTheme: (themeId) => {
+        const theme = THEME_PRESETS.find((t) => t.id === themeId);
+        if (theme) setStyleConfig((prev) => ({ ...prev, ...theme.style }));
+      },
+      setStyleConfig: (cfg) => setStyleConfig((prev) => ({ ...prev, ...cfg })),
+      setWorkspaceTheme: (th) => setWorkspaceTheme(th),
+      setAspectRatio: (r) => setAspectRatio(r),
+      setMediaItems: (items) => setMediaItems(items),
+      addMediaItem: (item) => setMediaItems((prev) => [...prev, item]),
+      setAudioUrl: (url) => setAudioUrl(url),
+      play: () => { if (!isPlaying) togglePlay(); },
+      pause: () => { if (isPlaying) togglePlay(); },
+      togglePlay: togglePlay,
+      seek: (sec) => seek(sec),
+      exportMP4: async (opts = {}) => {
+        const targetConfig: ExportConfig = {
+          aspectRatio: opts.aspectRatio || aspectRatio,
+          quality: opts.quality || exportConfig.quality,
+          fps: opts.fps || exportConfig.fps || 30,
+        };
+        const blob = await exportLyricalVideoMP4(
+          lyrics,
+          audioUrl || '',
+          styleConfig,
+          targetConfig,
+          (status) => {
+            setExportStatus(status);
+            if (opts.onProgress) {
+              opts.onProgress(status.progress, status.stage);
+            }
+          },
+          undefined,
+          mediaItems
+        );
+        const filename = `lyrical_video_${targetConfig.quality}_${Date.now()}.mp4`;
+        return { blob, filename, duration };
+      },
+    });
+
     (window as any).triggerStudioExport = handleStartExport;
     (window as any).runDirectExport = () => exportLyricalVideoMP4(lyrics, audioUrl || '', styleConfig, exportConfig, undefined, undefined, mediaItems);
     (window as any).exportLyricalVideoMP4 = exportLyricalVideoMP4;
-  }, [lyrics, styleConfig, exportConfig, mediaItems, audioUrl]);
+
+    notifyStudioStateChange(bridge.getState());
+  }, [
+    lyrics,
+    lrcInputText,
+    aspectRatio,
+    styleConfig,
+    workspaceTheme,
+    mediaItems,
+    bgMediaUrl,
+    isPlaying,
+    currentTime,
+    duration,
+    beatSync.bpm,
+    beatSync.beatStrength,
+    audioUrl,
+  ]);
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);

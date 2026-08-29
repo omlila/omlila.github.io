@@ -10,3 +10,4 @@ Welcome to the Conductor documentation for **Omlila Gen**.
 
 ## Active Tracks
 - [x] [Standalone Video Studio & Monorepo Deployment](./tracks/standalone_ghpages_deployment_20260829/)
+- [x] [Omlila App Automation Protocol & MCP Server](./tracks/app_automation_bridge_20260829/)
