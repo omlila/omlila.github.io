@@ -71,6 +71,14 @@ async function preloadMediaSequence(items: MediaSequenceItem[]): Promise<Map<str
   const loadedMap = new Map<string, HTMLImageElement | HTMLVideoElement>();
   if (!items || items.length === 0) return loadedMap;
 
+  let hiddenContainer = document.getElementById('omlila-exporter-video-cache');
+  if (!hiddenContainer) {
+    hiddenContainer = document.createElement('div');
+    hiddenContainer.id = 'omlila-exporter-video-cache';
+    hiddenContainer.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden;';
+    document.body.appendChild(hiddenContainer);
+  }
+
   const promises = items.map((item) => {
     return new Promise<void>((resolve) => {
       if (item.type === 'image') {
@@ -94,18 +102,31 @@ async function preloadMediaSequence(items: MediaSequenceItem[]): Promise<Map<str
         video.playsInline = true;
         video.src = item.url;
         
+        hiddenContainer!.appendChild(video);
+
+        let resolved = false;
         const onReady = () => {
+          if (resolved) return;
+          resolved = true;
           loadedMap.set(item.id, video);
           resolve();
         };
 
-        video.onloadeddata = () => {
+        const onCanPlay = () => {
           try {
             video.currentTime = Math.max(0.001, item.trimStartSec ?? 0.001);
           } catch { /* ignore */ }
           onReady();
         };
-        video.onerror = () => resolve();
+
+        if (video.readyState >= 3) {
+          onCanPlay();
+        } else {
+          video.addEventListener('canplay', onCanPlay, { once: true });
+          video.addEventListener('loadeddata', onCanPlay, { once: true });
+          video.onerror = () => onReady();
+          setTimeout(onReady, 2500);
+        }
       }
     });
   });
@@ -130,7 +151,10 @@ async function loadAudioBuffer(audioUrl: string): Promise<AudioBuffer | null> {
 
 function seekVideoToTime(video: HTMLVideoElement, targetTime: number): Promise<void> {
   return new Promise<void>((resolve) => {
-    if (Math.abs(video.currentTime - targetTime) < 0.001) {
+    const dur = (video.duration && !isNaN(video.duration) && isFinite(video.duration)) ? video.duration : 1000;
+    const clampedTarget = Math.max(0.001, Math.min(dur - 0.001, targetTime));
+
+    if (Math.abs(video.currentTime - clampedTarget) < 0.001) {
       return resolve();
     }
 
@@ -144,20 +168,29 @@ function seekVideoToTime(video: HTMLVideoElement, targetTime: number): Promise<v
     };
 
     const onSeeked = () => {
+      // In Chromium, requestVideoFrameCallback ensures the new frame is actually rendered into the video frame buffer
+      if ('requestVideoFrameCallback' in video) {
+        try {
+          (video as any).requestVideoFrameCallback(() => {
+            cleanup();
+          });
+          setTimeout(cleanup, 100);
+          return;
+        } catch {}
+      }
       cleanup();
     };
 
     video.addEventListener('seeked', onSeeked, { once: true });
 
     try {
-      const maxTime = Math.max(0, (video.duration && !isNaN(video.duration)) ? video.duration - 0.001 : 1000);
-      video.currentTime = Math.max(0, Math.min(maxTime, targetTime));
+      video.currentTime = clampedTarget;
     } catch {
       cleanup();
     }
 
     // Sufficient timeout to ensure decoder finishes intra-frame decode without dropping frames
-    setTimeout(cleanup, 350);
+    setTimeout(cleanup, 400);
   });
 }
 
@@ -517,6 +550,11 @@ export async function exportLyricalVideoMP4(
   }
 
   muxer.finalize();
+
+  const hiddenCache = document.getElementById('omlila-exporter-video-cache');
+  if (hiddenCache) {
+    hiddenCache.remove();
+  }
 
   const renderTimeSec = (performance.now() - startTimeMs) / 1000;
   const mp4Buffer = muxer.target.buffer;
