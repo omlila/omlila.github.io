@@ -66,7 +66,7 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
 
       if (item.type === 'image') {
         const img = new Image();
-        if (!item.url.startsWith('blob:')) {
+        if (!item.url.startsWith('blob:') && !item.url.startsWith('data:')) {
           img.crossOrigin = 'anonymous';
         }
         img.src = item.url;
@@ -77,15 +77,30 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
       } else {
         const video = document.createElement('video');
         video.preload = 'auto';
-        if (!item.url.startsWith('blob:')) {
+        if (!item.url.startsWith('blob:') && !item.url.startsWith('data:')) {
           video.crossOrigin = 'anonymous';
         }
         video.src = item.url;
         video.loop = true;
         video.muted = true;
         video.playsInline = true;
+        video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
         loadedMediaCache.current.set(item.id, video);
+
+        // Prime decoder immediately so frame 0 is decoded and visible
+        video.onloadedmetadata = () => {
+          const initialTime = Math.max(0.001, item.trimStartSec ?? 0.001);
+          video.currentTime = initialTime;
+          setBgLoaded(Date.now());
+        };
         video.onloadeddata = () => {
+          setBgLoaded(Date.now());
+        };
+        video.oncanplay = () => {
+          setBgLoaded(Date.now());
+        };
+        video.onseeked = () => {
           setBgLoaded(Date.now());
         };
         video.load();
@@ -115,7 +130,13 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
         v.loop = true;
         v.muted = true;
         v.playsInline = true;
+        v.setAttribute('playsinline', '');
+        v.setAttribute('webkit-playsinline', '');
         loadedMediaCache.current.set(item.id, v);
+        v.onloadedmetadata = () => {
+          v.currentTime = Math.max(0.001, item.trimStartSec ?? 0.001);
+          setBgLoaded(Date.now());
+        };
         v.load();
         return v;
       } else {
@@ -142,6 +163,8 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
       video.muted = true;
       video.loop = true;
       video.playsInline = true;
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', '');
       video.onloadeddata = () => {
         bgVideoRef.current = video;
         bgImageRef.current = null;
@@ -178,11 +201,12 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
         const mediaTransform = item.transform;
 
         // Sync video smoothly with direction, trimming, slow motion & time-stretching support
-        if (media && media instanceof HTMLVideoElement && media.duration > 0) {
+        if (media && media instanceof HTMLVideoElement) {
           const effectiveSpeed = calculateEffectivePlaybackRate(item, style.videoPlaybackRate ?? 1.0);
           media.playbackRate = effectiveSpeed;
 
-          const expectedVideoTime = calculateVideoTime(item, sceneInfo.timeInScene, media.duration);
+          const vidDuration = (media.duration && !isNaN(media.duration) && media.duration > 0) ? media.duration : 100;
+          const expectedVideoTime = calculateVideoTime(item, sceneInfo.timeInScene, vidDuration);
           const direction = item.playbackDirection || 'forward';
 
           if (isPlaying) {
@@ -190,7 +214,7 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
               if (media.paused) {
                 media.play().catch(() => {});
               }
-              if (Math.abs(media.currentTime - expectedVideoTime) > 0.35) {
+              if (Math.abs(media.currentTime - expectedVideoTime) > 0.25) {
                 media.currentTime = expectedVideoTime;
               }
             } else {
@@ -198,7 +222,7 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
               if (!media.paused) {
                 media.pause();
               }
-              if (Math.abs(media.currentTime - expectedVideoTime) > 0.04) {
+              if (Math.abs(media.currentTime - expectedVideoTime) > 0.03) {
                 media.currentTime = expectedVideoTime;
               }
             }
@@ -206,13 +230,13 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
             if (!media.paused) {
               media.pause();
             }
-            if (Math.abs(media.currentTime - expectedVideoTime) > 0.04) {
+            if (Math.abs(media.currentTime - expectedVideoTime) > 0.03) {
               media.currentTime = expectedVideoTime;
             }
           }
         }
 
-        // Prepare next transitioning media layer
+        // Prepare next transitioning media layer with smooth simultaneous playback
         let nextMedia = null;
         let nextMediaTransform = undefined;
 
@@ -221,10 +245,26 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
           nextMedia = getMediaElement(nextItem);
           nextMediaTransform = nextItem.transform;
 
-          if (nextMedia && nextMedia instanceof HTMLVideoElement && nextMedia.duration > 0) {
-            const nextExpectedTime = calculateVideoTime(nextItem, sceneInfo.transitionProgress * (nextItem.transitionDurationSec ?? 0.8), nextMedia.duration);
-            if (Math.abs(nextMedia.currentTime - nextExpectedTime) > 0.1) {
-              nextMedia.currentTime = nextExpectedTime;
+          if (nextMedia && nextMedia instanceof HTMLVideoElement) {
+            const nextDuration = (nextMedia.duration && !isNaN(nextMedia.duration) && nextMedia.duration > 0) ? nextMedia.duration : 100;
+            const nextExpectedTime = calculateVideoTime(nextItem, sceneInfo.transitionProgress * (nextItem.transitionDurationSec ?? 0.8), nextDuration);
+            const nextDir = nextItem.playbackDirection || 'forward';
+
+            if (isPlaying && nextDir === 'forward') {
+              nextMedia.playbackRate = calculateEffectivePlaybackRate(nextItem, style.videoPlaybackRate ?? 1.0);
+              if (nextMedia.paused) {
+                nextMedia.play().catch(() => {});
+              }
+              if (Math.abs(nextMedia.currentTime - nextExpectedTime) > 0.25) {
+                nextMedia.currentTime = nextExpectedTime;
+              }
+            } else {
+              if (!nextMedia.paused) {
+                nextMedia.pause();
+              }
+              if (Math.abs(nextMedia.currentTime - nextExpectedTime) > 0.03) {
+                nextMedia.currentTime = nextExpectedTime;
+              }
             }
           }
         }
@@ -259,36 +299,53 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
     };
   };
 
+  // Continuous high-performance 60fps render loop
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    let animFrameId: number;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const render = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
 
-    const { media, mediaTransform, nextMedia, nextMediaTransform, transitionProgress, transitionType } = getActiveSequenceMedia();
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-    // Attach beat strength and watermark as side-channel properties on ctx for renderer access
-    (ctx as any)._beatStrength = beatStrength;
-    (ctx as any)._bpm = bpm;
-    if (watermarkImg) (ctx as any)._watermarkImg = watermarkImg;
+      const { media, mediaTransform, nextMedia, nextMediaTransform, transitionProgress, transitionType } = getActiveSequenceMedia();
 
-    renderLyricFrame(
-      ctx,
-      targetDim.width,
-      targetDim.height,
-      lyrics,
-      currentTime,
-      duration,
-      style,
-      media,
-      nextMedia,
-      transitionProgress,
-      mediaTransform,
-      nextMediaTransform,
-      transitionType
-    );
-  }, [lyrics, currentTime, duration, style, aspectRatio, targetDim, bgLoaded, mediaItems, beatStrength, watermarkImg]);
+      // Attach beat strength and watermark as side-channel properties on ctx for renderer access
+      (ctx as any)._beatStrength = beatStrength;
+      (ctx as any)._bpm = bpm;
+      if (watermarkImg) (ctx as any)._watermarkImg = watermarkImg;
+
+      renderLyricFrame(
+        ctx,
+        targetDim.width,
+        targetDim.height,
+        lyrics,
+        currentTime,
+        duration,
+        style,
+        media,
+        nextMedia,
+        transitionProgress,
+        mediaTransform,
+        nextMediaTransform,
+        transitionType
+      );
+
+      if (isPlaying) {
+        animFrameId = requestAnimationFrame(render);
+      }
+    };
+
+    render();
+
+    return () => {
+      if (animFrameId) {
+        cancelAnimationFrame(animFrameId);
+      }
+    };
+  }, [lyrics, currentTime, duration, isPlaying, style, aspectRatio, targetDim, bgLoaded, mediaItems, beatStrength, bpm, watermarkImg]);
 
   const [dragMode, setDragMode] = useState<'text' | 'background'>('text');
 
