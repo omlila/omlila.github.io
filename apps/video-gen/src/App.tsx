@@ -228,6 +228,11 @@ export default function App() {
     }
   }, [styleConfig.enableBeatSync, audioRef.current]);
 
+  const handleTogglePlay = async () => {
+    await beatSync.resumeAudioContext();
+    togglePlay();
+  };
+
   // Restore blob URLs from IndexedDB on mount
   useEffect(() => {
     const restoreBlobs = async () => {
@@ -435,9 +440,9 @@ export default function App() {
       setMediaItems: (items) => setMediaItems(items),
       addMediaItem: (item) => setMediaItems((prev) => [...prev, item]),
       setAudioUrl: (url) => setAudioUrl(url),
-      play: () => { if (!isPlaying) togglePlay(); },
-      pause: () => { if (isPlaying) togglePlay(); },
-      togglePlay: togglePlay,
+      play: handleTogglePlay,
+      pause: pause,
+      togglePlay: handleTogglePlay,
       seek: (sec) => seek(sec),
       exportMP4: async (opts = {}) => {
         const targetConfig: ExportConfig = {
@@ -648,7 +653,7 @@ export default function App() {
                 mediaItems={mediaItems}
                 onStyleChange={setStyleConfig}
                 isPlaying={isPlaying}
-                togglePlay={togglePlay}
+                togglePlay={handleTogglePlay}
                 duration={duration}
                 seek={seek}
                 beatStrength={beatSync.beatStrength}
@@ -686,7 +691,7 @@ export default function App() {
                 <div className="flex items-center gap-4">
                   <button
                     type="button"
-                    onClick={togglePlay}
+                    onClick={handleTogglePlay}
                     aria-label={isPlaying ? 'Pause playback' : 'Start playback'}
                     className={`w-16 h-16 rounded-[24px] bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)] flex items-center justify-center shadow-[var(--md-sys-elevation-3)] hover:shadow-[var(--md-sys-elevation-4)] transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]`}
                   >

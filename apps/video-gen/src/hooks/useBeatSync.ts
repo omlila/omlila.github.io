@@ -11,6 +11,7 @@ export interface BeatSyncState {
   isConnected: boolean;
   connectToAudio: (audio: HTMLAudioElement) => void;
   disconnect: () => void;
+  resumeAudioContext: () => Promise<void>;
 }
 
 export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSyncState {
@@ -26,6 +27,16 @@ export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSy
   const [bpm, setBpm] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
 
+  const resumeAudioContext = useCallback(async () => {
+    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+      try {
+        await audioCtxRef.current.resume();
+      } catch (e) {
+        console.warn('AudioContext resume warning:', e);
+      }
+    }
+  }, []);
+
   const analyseFrame = useCallback(() => {
     if (!analyserRef.current || !enabled) return;
 
@@ -35,8 +46,7 @@ export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSy
     analyser.getByteFrequencyData(dataArray);
 
     // Focus on bass frequencies (roughly 20-250 Hz) for beat detection
-    // At 44100Hz sample rate, each bin = 44100/2048 ≈ 21.5 Hz
-    const bassEnd = Math.floor(bufferLen * 0.08); // ~top 250Hz
+    const bassEnd = Math.max(1, Math.floor(bufferLen * 0.08));
     let bassSum = 0;
     for (let i = 0; i < bassEnd; i++) {
       bassSum += dataArray[i];
@@ -70,21 +80,20 @@ export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSy
     try {
       // Create or reuse AudioContext
       if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
-        audioCtxRef.current = new AudioContext();
+        const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtxClass) {
+          audioCtxRef.current = new AudioCtxClass();
+        }
       }
       const audioCtx = audioCtxRef.current;
+      if (!audioCtx) return;
 
-      // Resume if suspended
+      // Resume if suspended on user gesture
       if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
+        audioCtx.resume().catch(() => {});
       }
 
-      // Disconnect old source
-      if (sourceRef.current) {
-        try { sourceRef.current.disconnect(); } catch {}
-      }
-
-      // Create analyser
+      // Create analyser if needed
       if (!analyserRef.current) {
         analyserRef.current = audioCtx.createAnalyser();
         analyserRef.current.fftSize = 2048;
@@ -92,10 +101,18 @@ export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSy
         analyserRef.current.connect(audioCtx.destination);
       }
 
-      // Connect audio element
-      const source = audioCtx.createMediaElementSource(audio);
-      source.connect(analyserRef.current);
-      sourceRef.current = source;
+      // Connect audio element if not already connected
+      if (!sourceRef.current && audio) {
+        try {
+          const source = audioCtx.createMediaElementSource(audio);
+          source.connect(analyserRef.current);
+          sourceRef.current = source;
+        } catch (e) {
+          // May already be connected to another node
+          console.warn('[BeatSync] MediaElement already connected or restricted:', e);
+        }
+      }
+
       connectedAudioRef.current = audio;
       setIsConnected(true);
 
@@ -109,14 +126,6 @@ export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSy
 
   const disconnect = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
-    if (sourceRef.current) {
-      try { sourceRef.current.disconnect(); } catch {}
-      sourceRef.current = null;
-    }
-    if (analyserRef.current) {
-      try { analyserRef.current.disconnect(); } catch {}
-      analyserRef.current = null;
-    }
     connectedAudioRef.current = null;
     setIsConnected(false);
     setBeatStrength(0);
@@ -139,5 +148,5 @@ export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSy
     };
   }, []);
 
-  return { beatStrength, bpm, isConnected, connectToAudio, disconnect };
+  return { beatStrength, bpm, isConnected, connectToAudio, disconnect, resumeAudioContext };
 }

@@ -19,7 +19,10 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
 
   useEffect(() => {
     if (!audioRef.current) {
-      audioRef.current = new Audio();
+      const audio = new Audio();
+      audio.crossOrigin = 'anonymous';
+      audio.preload = 'auto';
+      audioRef.current = audio;
     }
     const audio = audioRef.current;
     audio.volume = volume;
@@ -36,7 +39,11 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
     };
 
     const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
+    const handlePause = () => {
+      if (audio.ended || audio.paused) {
+        setIsPlaying(false);
+      }
+    };
 
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('ended', handleEnded);
@@ -53,6 +60,7 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
 
   useEffect(() => {
     if (audioRef.current && audioUrl) {
+      audioRef.current.crossOrigin = 'anonymous';
       audioRef.current.src = audioUrl;
       audioRef.current.load();
       setCurrentTime(0);
@@ -60,7 +68,7 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
     }
   }, [audioUrl]);
 
-  // Robust animation loop that advances time even if audio is synthesized / silent
+  // Robust animation loop that advances time smoothly
   useEffect(() => {
     let animFrameId: number;
     let lastTime = performance.now();
@@ -133,15 +141,17 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
     }
   }, [currentTime, lyrics]);
 
-  const play = useCallback(() => {
+  const play = useCallback(async () => {
     setIsPlaying(true);
     if (audioRef.current && audioUrl) {
-      if (audioRef.current.currentTime >= (audioRef.current.duration || effectiveDuration)) {
-        audioRef.current.currentTime = 0;
-      }
-      audioRef.current.play().catch((err) => {
+      try {
+        if (audioRef.current.currentTime >= (audioRef.current.duration || effectiveDuration)) {
+          audioRef.current.currentTime = 0;
+        }
+        await audioRef.current.play();
+      } catch (err) {
         console.warn('Audio play notice (clock fallback active):', err);
-      });
+      }
     }
   }, [audioUrl, effectiveDuration]);
 
