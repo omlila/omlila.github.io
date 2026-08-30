@@ -1418,6 +1418,30 @@ export const LyricStylingControls: React.FC<LyricStylingControlsProps> = ({
                       </div>
                     </div>
                   </div>
+
+                  {/* Auto-fade Scrim during Instrumental Breaks */}
+                  <div className="flex items-center justify-between pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
+                    <div>
+                      <div className="text-xs font-bold text-[var(--md-sys-color-on-surface)]">
+                        Auto-Fade During Instrumental Breaks
+                      </div>
+                      <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                        Smoothly hides the scrim overlay when no lyrics are being sung
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateStyle('scrimOnlyWhenLyricsActive', !style.scrimOnlyWhenLyricsActive)}
+                      aria-pressed={style.scrimOnlyWhenLyricsActive}
+                      className={`py-1 px-3 rounded-lg border text-xs font-bold cursor-pointer transition-colors ${
+                        style.scrimOnlyWhenLyricsActive
+                          ? 'bg-[var(--md-sys-color-primary-container)] border-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary-container)]'
+                          : 'bg-[var(--md-sys-color-surface-container)] border-transparent text-[var(--md-sys-color-on-surface-variant)]'
+                      }`}
+                    >
+                      {style.scrimOnlyWhenLyricsActive ? 'Active Only' : 'Always On'}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

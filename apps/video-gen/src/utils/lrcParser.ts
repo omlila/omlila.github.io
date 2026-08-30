@@ -146,6 +146,17 @@ export function parseLrc(content: string): LyricLine[] {
 
     matches.forEach((match) => {
       const startTime = parseTimestamp(match[1]);
+      if (!textWithoutTime) {
+        // Blank timestamp marker (e.g. [00:14.00]) -> acts as explicit end marker
+        result.push({
+          id: `lrc-blank-${lineIdx}-${Math.random().toString(36).substr(2, 6)}`,
+          startTime,
+          endTime: startTime,
+          text: '',
+        });
+        return;
+      }
+
       const { cleanedText, words } = parseInlineWords(textWithoutTime, startTime);
 
       result.push({
@@ -160,25 +171,47 @@ export function parseLrc(content: string): LyricLine[] {
 
   result.sort((a, b) => a.startTime - b.startTime);
 
+  // Filter out blank markers while using their timestamps to end the preceding line
+  const filteredResult: LyricLine[] = [];
   for (let i = 0; i < result.length; i++) {
-    if (i < result.length - 1) {
-      result[i].endTime = result[i + 1].startTime;
+    const item = result[i];
+    if (!item.text) {
+      // Empty marker -> set end time on previous valid line
+      if (filteredResult.length > 0) {
+        filteredResult[filteredResult.length - 1].endTime = item.startTime;
+      }
+      continue;
+    }
+    filteredResult.push(item);
+  }
+
+  for (let i = 0; i < filteredResult.length; i++) {
+    if (i < filteredResult.length - 1) {
+      const nextStart = filteredResult[i + 1].startTime;
+      const gap = nextStart - filteredResult[i].startTime;
+      // If there is a long instrumental break (> 5.5s), cap line duration to natural length
+      if (gap > 5.5) {
+        const estimatedDuration = Math.max(3.5, (filteredResult[i].words?.length || 4) * 0.65);
+        filteredResult[i].endTime = Math.min(nextStart, filteredResult[i].startTime + estimatedDuration);
+      } else {
+        filteredResult[i].endTime = nextStart;
+      }
     } else {
-      result[i].endTime = result[i].startTime + 8;
+      filteredResult[i].endTime = filteredResult[i].startTime + Math.max(4.0, (filteredResult[i].words?.length || 4) * 0.65);
     }
 
-    const currentWords = result[i].words;
+    const currentWords = filteredResult[i].words;
     if (currentWords && currentWords.length > 0) {
-      const lineDuration = result[i].endTime - result[i].startTime;
+      const lineDuration = filteredResult[i].endTime - filteredResult[i].startTime;
       const wordCount = currentWords.length;
       currentWords.forEach((w, wIdx) => {
-        w.startTime = result[i].startTime + (wIdx / wordCount) * lineDuration;
-        w.endTime = result[i].startTime + ((wIdx + 1) / wordCount) * lineDuration;
+        w.startTime = filteredResult[i].startTime + (wIdx / wordCount) * lineDuration;
+        w.endTime = filteredResult[i].startTime + ((wIdx + 1) / wordCount) * lineDuration;
       });
     }
   }
 
-  return result;
+  return filteredResult;
 }
 
 /**

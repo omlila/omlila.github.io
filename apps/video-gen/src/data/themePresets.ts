@@ -41,6 +41,8 @@ export const THEME_PRESETS: ThemePresetInfo[] = [
       linesToShow: 1,
       highlightActiveWord: false,
       enableActiveLineBackground: true,
+      hideInactiveLyrics: true,
+      scrimOnlyWhenLyricsActive: true,
       activePillColor: '#000000',
       activePillOpacity: 0.55,
       activePillPaddingX: 32,

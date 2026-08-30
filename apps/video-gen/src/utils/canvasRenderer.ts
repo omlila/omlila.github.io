@@ -228,54 +228,80 @@ export function renderLyricFrame(
 
   // 4.5. Cinema Scrim & Feathered Background Fade (Half-Screen / Lower-Third Cover)
   if (style.enableScrimOverlay) {
-    ctx.save();
-    const scrimType = style.scrimType || 'bottom-fade';
-    const heightPercent = (style.scrimHeightPercent ?? 50) / 100;
-    const scrimOpacity = Math.min(1.0, Math.max(0.0, style.scrimOpacity ?? 0.75));
-    const scrimColor = style.scrimColor || '#000000';
-    const featherRatio = (style.scrimFeatherPercent ?? 50) / 100;
-
-    let r = 0, g = 0, b = 0;
-    const hexMatch = scrimColor.match(/^#([0-9a-f]{6})$/i);
-    if (hexMatch) {
-      r = parseInt(hexMatch[1].substring(0, 2), 16);
-      g = parseInt(hexMatch[1].substring(2, 4), 16);
-      b = parseInt(hexMatch[1].substring(4, 6), 16);
+    let scrimActiveAlpha = 1.0;
+    if (style.scrimOnlyWhenLyricsActive) {
+      const hasActiveLyric = lyrics.some(
+        (l) => currentTime >= (l.startTime - 0.4) && currentTime <= (l.endTime + 0.4)
+      );
+      if (!hasActiveLyric) {
+        scrimActiveAlpha = 0.0;
+      } else {
+        const activeL = lyrics.find(
+          (l) => currentTime >= (l.startTime - 0.4) && currentTime <= (l.endTime + 0.4)
+        );
+        if (activeL) {
+          if (currentTime < activeL.startTime) {
+            scrimActiveAlpha = Math.min(1.0, Math.max(0.0, (currentTime - (activeL.startTime - 0.4)) / 0.4));
+          } else if (currentTime > activeL.endTime) {
+            scrimActiveAlpha = Math.min(1.0, Math.max(0.0, 1.0 - (currentTime - activeL.endTime) / 0.4));
+          } else {
+            scrimActiveAlpha = 1.0;
+          }
+        }
+      }
     }
 
-    if (scrimType === 'bottom-fade' || scrimType === 'horizontal-split') {
-      const scrimH = height * heightPercent;
-      const startY = height - scrimH;
-      
-      const grad = ctx.createLinearGradient(0, startY, 0, height);
-      grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
-      grad.addColorStop(Math.min(0.9, featherRatio), `rgba(${r},${g},${b},${scrimOpacity * 0.7})`);
-      grad.addColorStop(1, `rgba(${r},${g},${b},${scrimOpacity})`);
-      
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, startY, width, scrimH);
-    } else if (scrimType === 'top-fade') {
-      const scrimH = height * heightPercent;
-      const grad = ctx.createLinearGradient(0, 0, 0, scrimH);
-      grad.addColorStop(0, `rgba(${r},${g},${b},${scrimOpacity})`);
-      grad.addColorStop(Math.min(0.9, featherRatio), `rgba(${r},${g},${b},${scrimOpacity * 0.7})`);
-      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
-      
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, width, scrimH);
-    } else if (scrimType === 'center-band') {
-      const bandH = height * heightPercent;
-      const startY = (height - bandH) / 2;
-      const grad = ctx.createLinearGradient(0, startY, 0, startY + bandH);
-      grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
-      grad.addColorStop(0.3, `rgba(${r},${g},${b},${scrimOpacity})`);
-      grad.addColorStop(0.7, `rgba(${r},${g},${b},${scrimOpacity})`);
-      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
-      
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, startY, width, bandH);
+    if (scrimActiveAlpha > 0.01) {
+      ctx.save();
+      const scrimType = style.scrimType || 'bottom-fade';
+      const heightPercent = (style.scrimHeightPercent ?? 50) / 100;
+      const baseOpacity = Math.min(1.0, Math.max(0.0, style.scrimOpacity ?? 0.75));
+      const scrimOpacity = baseOpacity * scrimActiveAlpha;
+      const scrimColor = style.scrimColor || '#000000';
+      const featherRatio = (style.scrimFeatherPercent ?? 50) / 100;
+
+      let r = 0, g = 0, b = 0;
+      const hexMatch = scrimColor.match(/^#([0-9a-f]{6})$/i);
+      if (hexMatch) {
+        r = parseInt(hexMatch[1].substring(0, 2), 16);
+        g = parseInt(hexMatch[1].substring(2, 4), 16);
+        b = parseInt(hexMatch[1].substring(4, 6), 16);
+      }
+
+      if (scrimType === 'bottom-fade' || scrimType === 'horizontal-split') {
+        const scrimH = height * heightPercent;
+        const startY = height - scrimH;
+        
+        const grad = ctx.createLinearGradient(0, startY, 0, height);
+        grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
+        grad.addColorStop(Math.min(0.9, featherRatio), `rgba(${r},${g},${b},${scrimOpacity * 0.7})`);
+        grad.addColorStop(1, `rgba(${r},${g},${b},${scrimOpacity})`);
+        
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, startY, width, scrimH);
+      } else if (scrimType === 'top-fade') {
+        const scrimH = height * heightPercent;
+        const grad = ctx.createLinearGradient(0, 0, 0, scrimH);
+        grad.addColorStop(0, `rgba(${r},${g},${b},${scrimOpacity})`);
+        grad.addColorStop(Math.min(0.9, featherRatio), `rgba(${r},${g},${b},${scrimOpacity * 0.7})`);
+        grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+        
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, scrimH);
+      } else if (scrimType === 'center-band') {
+        const bandH = height * heightPercent;
+        const startY = (height - bandH) / 2;
+        const grad = ctx.createLinearGradient(0, startY, 0, startY + bandH);
+        grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
+        grad.addColorStop(0.3, `rgba(${r},${g},${b},${scrimOpacity})`);
+        grad.addColorStop(0.7, `rgba(${r},${g},${b},${scrimOpacity})`);
+        grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+        
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, startY, width, bandH);
+      }
+      ctx.restore();
     }
-    ctx.restore();
   }
   
   if ((style.backgroundTintAmount || 0) > 0) {
@@ -392,11 +418,26 @@ export function renderLyricFrame(
 
   // 9. Find Active Lyric Lines Window with Smooth Continuous Anchor
   const linesToShow = style.linesToShow || 3;
+  const shouldHideInactive = style.hideInactiveLyrics ?? (linesToShow === 1 || style.animationType === 'clean-subtitle');
   let activeIndex = lyrics.findIndex(
     (l) => currentTime >= l.startTime && currentTime <= l.endTime
   );
 
-  // If in a gap between lines, anchor smoothly to nearest previous line
+  // If shouldHideInactive is enabled and no lyric is currently active at this moment:
+  if (shouldHideInactive && activeIndex === -1 && lyrics.length > 0) {
+    // Check if we are in smooth exit fade (within 0.25s of a line ending)
+    const justEndedIdx = lyrics.findIndex(
+      (l) => currentTime > l.endTime && currentTime <= l.endTime + 0.25
+    );
+    if (justEndedIdx === -1) {
+      // In an instrumental intro / break / outro -> Render NOTHING!
+      ctx.restore();
+      return;
+    }
+    activeIndex = justEndedIdx;
+  }
+
+  // If in a gap between lines for multi-line mode, anchor smoothly to nearest previous line
   if (activeIndex === -1 && lyrics.length > 0) {
     for (let i = 0; i < lyrics.length; i++) {
       if (currentTime < lyrics[i].startTime) {
@@ -519,6 +560,13 @@ export function renderLyricFrame(
     if (perspectiveDist < 0) perspectiveDist = 0;
     const perspectiveFade = style.enableLinePerspectiveFade ? Math.max(0.15, 1.0 - perspectiveDist * (style.perspectiveFadeStrength ?? 0.3)) : 1.0;
     let fadeAlpha = isCurrentlyActive ? 1.0 : isPast ? (0.45 * perspectiveFade) : (0.25 * perspectiveFade);
+    if (shouldHideInactive && !isCurrentlyActive) {
+      if (isPast && currentTime <= line.endTime + 0.25) {
+        fadeAlpha = Math.max(0.0, 1.0 - (currentTime - line.endTime) / 0.25);
+      } else {
+        fadeAlpha = 0.0;
+      }
+    }
     const isCleanSubtitle = style.animationType === 'clean-subtitle';
     const activeExtraScale = isCleanSubtitle ? 1.0 : (style.enableFontWeightPop ? (style.activeLineExtraScale ?? 1.1) : 1.05);
     // B1: Beat-sync drives scale pulse on active line

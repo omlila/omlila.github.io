@@ -197,6 +197,8 @@ export interface StyleConfig {
   scrimOpacity?: number; // 0.0 to 1.0, default 0.75
   scrimColor?: string; // default '#000000'
   scrimFeatherPercent?: number; // 10 to 100% feather/blend softness, default 50%
+  scrimOnlyWhenLyricsActive?: boolean; // Smoothly fades out scrim during instrumental breaks when no lyrics are sung
+  hideInactiveLyrics?: boolean; // Completely hides lyrics and boxes when no line is actively sung (default true for single line)
 
   // Feature 1: Lyrics Text Wrapping Control
   lyricsMaxWidthPercent?: number; // 30 to 100, default 90 - max width as % of canvas
