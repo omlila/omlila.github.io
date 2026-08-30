@@ -176,27 +176,27 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
   return (
     <div className="space-y-4">
       {/* Upload Header Bar */}
-      <div className="md-surface-container p-6 space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="md-surface-container p-4 sm:p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm font-bold text-[var(--md-sys-color-primary)]">
-            <Film className="w-5 h-5 text-[var(--md-sys-color-primary)]" aria-hidden="true" />
+            <Film className="w-5 h-5 text-[var(--md-sys-color-primary)] shrink-0" aria-hidden="true" />
             <span>Video Scenes & Background Sequencer</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={autoDistributeDurations}
               disabled={mediaItems.length === 0 || audioDuration <= 0}
               aria-label="Auto-fit image durations to match audio length"
               title={audioDuration <= 0 ? "Load audio first to use auto-fit" : "Auto-fit clip durations to match audio length"}
-              className="md-button-outlined !px-3 !py-1.5 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold"
+              className="md-button-outlined !px-3 !py-1.5 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold shrink-0"
             >
               <Wand2 className="w-4 h-4" aria-hidden="true" />
               <span>Equal Fit ({audioDuration > 0 ? `${audioDuration.toFixed(0)}s` : 'Full Track'})</span>
             </button>
 
-            <label className="md-button-filled cursor-pointer flex items-center gap-2 text-xs font-bold !py-1.5 !px-3">
+            <label className="md-button-filled cursor-pointer flex items-center gap-2 text-xs font-bold !py-1.5 !px-3 shrink-0 shadow-sm">
               <Upload className="w-4 h-4" aria-hidden="true" />
               <span>Add Videos / Images</span>
               <input
@@ -210,7 +210,7 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
           </div>
         </div>
 
-        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
           Upload video backgrounds or photos. Click <strong>"End Here ✂️"</strong> during audio playback to lock scene boundaries, or use <strong>"⏩ Forward"</strong>, <strong>"⏪ Reverse"</strong>, and <strong>"🪃 Boomerang"</strong> to create looping visuals.
         </p>
 

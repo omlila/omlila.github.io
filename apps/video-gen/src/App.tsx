@@ -598,15 +598,15 @@ export default function App() {
   return (
     <div className={`min-h-screen md-surface flex flex-col selection:bg-blue-500 selection:text-white transition-colors duration-300`}>
       {/* Studio Header Bar - MD3 Top App Bar */}
-      <header className={`sticky top-0 z-40 bg-[var(--md-sys-color-surface-container)] px-6 py-4 flex items-center justify-between shadow-[var(--md-sys-elevation-2)]`}>
-        <div className="flex items-center gap-4">
-          <div className={`w-12 h-12 rounded-full bg-[var(--md-sys-color-primary-container)] flex items-center justify-center shadow-[var(--md-sys-elevation-1)]`}>
-            <Video className="w-6 h-6 text-[var(--md-sys-color-on-primary-container)]" aria-hidden="true" />
+      <header className={`sticky top-0 z-40 bg-[var(--md-sys-color-surface-container)] px-4 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-3 shadow-[var(--md-sys-elevation-2)]`}>
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[var(--md-sys-color-primary-container)] flex items-center justify-center shadow-[var(--md-sys-elevation-1)] shrink-0`}>
+            <Video className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--md-sys-color-on-primary-container)]" aria-hidden="true" />
           </div>
           <div>
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-[var(--md-sys-color-on-surface)] m-0">
+                <h1 className="text-lg sm:text-xl font-bold text-[var(--md-sys-color-on-surface)] m-0">
                   Omlila Video Generator
                 </h1>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-[var(--md-sys-color-tertiary-container)] text-[var(--md-sys-color-on-tertiary-container)]">
@@ -641,7 +641,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Auto-Saved Confirmation Status Badge */}
           {lastSavedTimestamp && (
             <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--md-sys-color-tertiary-container)] text-[12px] font-medium text-[var(--md-sys-color-on-tertiary-container)]">
@@ -794,28 +794,28 @@ export default function App() {
               </div>
 
               {/* Playback Buttons & Volume */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                   <button
                     type="button"
                     onClick={handleTogglePlay}
                     aria-label={isPlaying ? 'Pause playback' : 'Start playback'}
-                    className={`w-16 h-16 rounded-[24px] bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)] flex items-center justify-center shadow-[var(--md-sys-elevation-3)] hover:shadow-[var(--md-sys-elevation-4)] transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]`}
+                    className={`w-14 h-14 sm:w-16 sm:h-16 rounded-[20px] sm:rounded-[24px] bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)] flex items-center justify-center shadow-[var(--md-sys-elevation-3)] hover:shadow-[var(--md-sys-elevation-4)] transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)] shrink-0`}
                   >
-                    {isPlaying ? <Pause className="w-8 h-8" aria-hidden="true" /> : <Play className="w-8 h-8 ml-1" aria-hidden="true" />}
+                    {isPlaying ? <Pause className="w-7 h-7 sm:w-8 sm:h-8" aria-hidden="true" /> : <Play className="w-7 h-7 sm:w-8 sm:h-8 ml-1" aria-hidden="true" />}
                   </button>
 
                   <button
                     type="button"
                     onClick={() => seek(0)}
                     aria-label="Restart audio from beginning"
-                    className="md-button-tonal !p-4 !rounded-full"
+                    className="md-button-tonal !p-3 sm:!p-4 !rounded-full shrink-0"
                   >
-                    <RotateCcw className="w-6 h-6" aria-hidden="true" />
+                    <RotateCcw className="w-5 h-5 sm:w-6 sm:h-6" aria-hidden="true" />
                   </button>
 
-                  <label className="md-button-outlined cursor-pointer flex items-center gap-2">
-                    <Upload className="w-5 h-5" aria-hidden="true" />
+                  <label className="md-button-outlined cursor-pointer flex items-center gap-2 text-xs sm:text-sm shrink-0 shadow-sm">
+                    <Upload className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
                     <span>Upload Audio</span>
                     <input
                       type="file"
@@ -827,7 +827,7 @@ export default function App() {
                 </div>
 
                 {/* Volume Slider */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0 ml-auto">
                   <Volume2 className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)]" aria-hidden="true" />
                   <label htmlFor="volume-control-slider" className="sr-only">Volume</label>
                   <input
@@ -838,7 +838,7 @@ export default function App() {
                     step={0.05}
                     value={volume}
                     onChange={(e) => setVolume(Number(e.target.value))}
-                    className="w-28 accent-[var(--md-sys-color-primary)] h-2 bg-[var(--md-sys-color-surface-container-highest)] rounded-full appearance-none cursor-pointer"
+                    className="w-24 sm:w-28 accent-[var(--md-sys-color-primary)] h-2 bg-[var(--md-sys-color-surface-container-highest)] rounded-full appearance-none cursor-pointer"
                   />
                 </div>
               </div>

@@ -129,28 +129,50 @@ export const LyricTimelineEditor: React.FC<LyricTimelineEditorProps> = ({
   return (
     <div className="space-y-4">
       {/* Top Action Header Bar */}
-      <div className="md-surface-container p-6 space-y-3">
-        <div className="flex items-center justify-between">
+      <div className="md-surface-container p-4 sm:p-6 space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm font-bold text-[var(--md-sys-color-primary)]">
-            <FileText className="w-5 h-5 text-[var(--md-sys-color-primary)]" aria-hidden="true" />
+            <FileText className="w-5 h-5 text-[var(--md-sys-color-primary)] shrink-0" aria-hidden="true" />
             <span>Interactive Lyrics & Timing Editor</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Action Buttons Toolbar - fully responsive flex-wrap and scroll */}
+          <div className="flex flex-wrap items-center gap-2 overflow-x-auto pb-1 max-w-full">
+            <label className="md-button-filled cursor-pointer flex items-center gap-1.5 text-xs sm:text-sm shrink-0 shadow-sm">
+              <Upload className="w-4 h-4" aria-hidden="true" />
+              <span>Import (.RTF, .LRC, .TXT)</span>
+              <input
+                type="file"
+                accept=".json,.srt,.rtf,.lrc,.vtt,.txt"
+                onChange={onFileUpload}
+                className="hidden"
+              />
+            </label>
+
             <button
               type="button"
               onClick={addLine}
               aria-label="Add new lyric timing cue"
-              className="md-button-filled flex items-center gap-1.5"
+              className="md-button-tonal flex items-center gap-1.5 text-xs sm:text-sm shrink-0"
             >
               <Plus className="w-4 h-4" aria-hidden="true" />
-              <span>Add Cue Line</span>
+              <span>Add Cue</span>
             </button>
 
-            <div className="relative group">
+            <button
+              type="button"
+              onClick={autoDistributeTimings}
+              aria-label="Auto-distribute lyrics timings evenly across audio duration"
+              className="md-button-tonal flex items-center gap-1.5 !bg-[var(--md-sys-color-secondary-container)] !text-[var(--md-sys-color-on-secondary-container)] text-xs sm:text-sm shrink-0"
+            >
+              <Sparkles className="w-4 h-4 text-[var(--md-sys-color-primary)]" aria-hidden="true" />
+              <span>Auto-Sync</span>
+            </button>
+
+            <div className="relative group shrink-0">
               <button
                 type="button"
-                className="md-button-tonal flex items-center gap-1.5 !bg-[var(--md-sys-color-tertiary-container)] !text-[var(--md-sys-color-on-tertiary-container)]"
+                className="md-button-tonal flex items-center gap-1.5 !bg-[var(--md-sys-color-tertiary-container)] !text-[var(--md-sys-color-on-tertiary-container)] text-xs sm:text-sm"
               >
                 <Download className="w-4 h-4" aria-hidden="true" />
                 <span>Export Subs</span>
@@ -182,38 +204,17 @@ export const LyricTimelineEditor: React.FC<LyricTimelineEditorProps> = ({
 
             <button
               type="button"
-              onClick={autoDistributeTimings}
-              aria-label="Auto-distribute lyrics timings evenly across audio duration"
-              className="md-button-tonal flex items-center gap-1.5 !bg-[var(--md-sys-color-secondary-container)] !text-[var(--md-sys-color-on-secondary-container)]"
-            >
-              <Sparkles className="w-4 h-4 text-[var(--md-sys-color-primary)]" aria-hidden="true" />
-              <span>Auto-Sync</span>
-            </button>
-
-            <button
-              type="button"
               onClick={() => {
                 localStorage.removeItem('omlila_saved_lyrics');
                 const freshLyrics = parseLyricCues(SAMPLE_PRESETS[0].lrcContent);
                 onUpdateLyrics(freshLyrics);
               }}
               title="Reset cached timestamps to default continuous timings"
-              className="md-button-outlined flex items-center gap-1.5 !text-[var(--md-sys-color-tertiary)]"
+              className="md-button-outlined flex items-center gap-1.5 !text-[var(--md-sys-color-tertiary)] text-xs sm:text-sm shrink-0"
             >
               <RotateCcw className="w-4 h-4" aria-hidden="true" />
-              <span>Reset Fresh Timings</span>
+              <span>Reset</span>
             </button>
-
-            <label className="md-button-outlined cursor-pointer flex items-center gap-1.5">
-              <Upload className="w-4 h-4" aria-hidden="true" />
-              <span>Import (.RTF, .LRC, .TXT)</span>
-              <input
-                type="file"
-                accept=".json,.srt,.rtf,.lrc,.vtt,.txt"
-                onChange={onFileUpload}
-                className="hidden"
-              />
-            </label>
           </div>
         </div>
 
@@ -278,20 +279,20 @@ export const LyricTimelineEditor: React.FC<LyricTimelineEditorProps> = ({
               key={line.id || idx}
               className="md-surface-container p-3 space-y-2 group hover:border-[var(--md-sys-color-primary)] border border-transparent transition-colors"
             >
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 {/* Play to position */}
                 <button
                   type="button"
                   onClick={() => onSeek(line.startTime)}
                   aria-label={`Jump audio preview to cue ${idx + 1} at ${formatTime(line.startTime)}`}
-                  className="flex items-center gap-1.5 text-sm font-mono font-bold text-[var(--md-sys-color-primary)] hover:text-[var(--md-sys-color-primary-container)] cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)] rounded px-1 tabular-nums"
+                  className="flex items-center gap-1.5 text-sm font-mono font-bold text-[var(--md-sys-color-primary)] hover:text-[var(--md-sys-color-primary-container)] cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)] rounded px-1 tabular-nums shrink-0"
                 >
                   <Play className="w-4 h-4" aria-hidden="true" />
                   <span>[{formatTime(line.startTime)}]</span>
                 </button>
 
                 {/* Timing controls */}
-                <div className="flex items-center gap-2 text-[11px] font-mono">
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
                   <div className="flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5 text-[var(--md-sys-color-on-surface-variant)]" aria-hidden="true" />
                     <button
@@ -310,7 +311,7 @@ export const LyricTimelineEditor: React.FC<LyricTimelineEditorProps> = ({
                       min={0}
                       value={line.startTime}
                       onChange={(e) => updateLineTiming(line.id, 'startTime', Number(e.target.value))}
-                      className="w-16 bg-[var(--md-sys-color-surface-container-highest)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-1.5 py-0.5 text-xs font-mono text-center rounded tabular-nums focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)] focus-visible:outline-none"
+                      className="w-14 bg-[var(--md-sys-color-surface-container-highest)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-1 py-0.5 text-xs font-mono text-center rounded tabular-nums focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)] focus-visible:outline-none"
                     />
                   </div>
                   <span className="text-[var(--md-sys-color-on-surface-variant)] font-bold">→</span>
@@ -331,7 +332,7 @@ export const LyricTimelineEditor: React.FC<LyricTimelineEditorProps> = ({
                       min={0}
                       value={line.endTime}
                       onChange={(e) => updateLineTiming(line.id, 'endTime', Number(e.target.value))}
-                      className="w-16 bg-[var(--md-sys-color-surface-container-highest)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-1.5 py-0.5 text-xs font-mono text-center rounded tabular-nums focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)] focus-visible:outline-none"
+                      className="w-14 bg-[var(--md-sys-color-surface-container-highest)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-1 py-0.5 text-xs font-mono text-center rounded tabular-nums focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)] focus-visible:outline-none"
                     />
                   </div>
 
@@ -339,23 +340,23 @@ export const LyricTimelineEditor: React.FC<LyricTimelineEditorProps> = ({
                     type="button"
                     onClick={() => insertLine(idx, 'before')}
                     title="Add lyric before"
-                    className="md-button-tonal !p-1 text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-primary-container)]"
+                    className="md-button-tonal !py-0.5 !px-1.5 text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-primary-container)]"
                   >
-                    <span className="text-[10px] font-bold px-1">+ Before</span>
+                    <span className="text-[10px] font-bold">+ Before</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => insertLine(idx, 'after')}
                     title="Add lyric after"
-                    className="md-button-tonal !p-1 text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-primary-container)]"
+                    className="md-button-tonal !py-0.5 !px-1.5 text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-primary-container)]"
                   >
-                    <span className="text-[10px] font-bold px-1">+ After</span>
+                    <span className="text-[10px] font-bold">+ After</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => deleteLine(line.id)}
                     aria-label={`Delete lyric line ${idx + 1}`}
-                    className="md-button-tonal !p-1.5 text-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-error-container)] hover:text-[var(--md-sys-color-on-error-container)]"
+                    className="md-button-tonal !p-1 text-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-error-container)] hover:text-[var(--md-sys-color-on-error-container)] ml-auto"
                   >
                     <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
