@@ -44,19 +44,44 @@ export default function App() {
   const initialPreset = SAMPLE_PRESETS[0];
   const initialTheme = THEME_PRESETS[0];
 
+  const isHydratedRef = useRef(false);
+
   const [workspaceTheme, setWorkspaceTheme] = useState<AppWorkspaceTheme>(() => {
     return (localStorage.getItem('omlila_saved_workspaceTheme') as AppWorkspaceTheme) || 'forest-green';
   });
-  const [lrcInputText, setLrcInputText] = useState(initialPreset.lrcContent);
+
+  const [lrcInputText, setLrcInputText] = useState<string>(() => {
+    try {
+      const savedLrc = localStorage.getItem('omlila_saved_lrcText');
+      if (savedLrc) return savedLrc;
+      const savedLyrics = localStorage.getItem('omlila_saved_lyrics');
+      if (savedLyrics) {
+        const parsed = JSON.parse(savedLyrics);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return formatLyricCuesToLrc(parsed);
+        }
+      }
+    } catch (e) {}
+    return initialPreset.lrcContent;
+  });
+
   const [lyrics, setLyrics] = useState<LyricLine[]>(() => {
     try {
       const saved = localStorage.getItem('omlila_saved_lyrics');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     } catch (e) {}
     return parseLyricCues(initialPreset.lrcContent);
   });
+
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
   const [activeTab, setActiveTab] = useState<'styles' | 'media' | 'lyrics'>('styles');
+  const [customAudioName, setCustomAudioName] = useState<string>(() => {
+    return localStorage.getItem('omlila_saved_audio_name') || 'आमा (Aama)';
+  });
+
   const defaultMediaItems: MediaSequenceItem[] = [
     {
       id: 'default_bg_1',
@@ -88,14 +113,7 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Replace any revoked blob URLs with fallback static image
-          return parsed.map((item, idx) => {
-            if (item.url && item.url.startsWith('blob:')) {
-              const fallbackUrl = defaultMediaItems[idx % defaultMediaItems.length]?.url || `${baseUrl}mother_golden.jpg`;
-              return { ...item, url: fallbackUrl };
-            }
-            return item;
-          });
+          return parsed;
         }
       }
     } catch (e) {}
@@ -148,16 +166,19 @@ export default function App() {
 
   const [lastSavedTimestamp, setLastSavedTimestamp] = useState<string | null>(null);
 
-  // Auto-save to localStorage on every change
+  // Auto-save to localStorage on every change (only after initial rehydration)
   useEffect(() => {
+    if (!isHydratedRef.current) return;
     try {
       localStorage.setItem('omlila_saved_lyrics', JSON.stringify(lyrics));
+      localStorage.setItem('omlila_saved_lrcText', lrcInputText);
       localStorage.setItem('omlila_saved_styleConfig', JSON.stringify(styleConfig));
       localStorage.setItem('omlila_saved_workspaceTheme', workspaceTheme);
       localStorage.setItem('omlila_saved_mediaItems', JSON.stringify(mediaItems));
+      localStorage.setItem('omlila_saved_audio_name', customAudioName);
       setLastSavedTimestamp(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } catch (e) {}
-  }, [lyrics, styleConfig, workspaceTheme, mediaItems]);
+  }, [lyrics, lrcInputText, styleConfig, workspaceTheme, mediaItems, customAudioName]);
 
   const handleExportProjectBackup = () => {
     const projectData = {
@@ -169,6 +190,7 @@ export default function App() {
       workspaceTheme,
       aspectRatio,
       mediaItems,
+      audioName: customAudioName,
     };
     const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -190,6 +212,7 @@ export default function App() {
         if (data.workspaceTheme) setWorkspaceTheme(data.workspaceTheme);
         if (data.aspectRatio) setAspectRatio(data.aspectRatio);
         if (data.mediaItems) setMediaItems(data.mediaItems);
+        if (data.audioName) setCustomAudioName(data.audioName);
         alert('✅ Project backup successfully loaded into studio!');
       } catch (err) {
         alert('Invalid project backup JSON file.');
@@ -293,10 +316,15 @@ export default function App() {
       try {
         const savedAudio = await getAudioFile();
         if (savedAudio && savedAudio.size > 0 && isMounted) {
-          setAudioUrl(URL.createObjectURL(savedAudio));
+          const audioBlobUrl = URL.createObjectURL(savedAudio);
+          setAudioUrl(audioBlobUrl);
+          const savedName = localStorage.getItem('omlila_saved_audio_name');
+          if (savedName) setCustomAudioName(savedName);
         }
       } catch (e) {
         console.warn('Could not restore audio file from IndexedDB:', e);
+      } finally {
+        isHydratedRef.current = true;
       }
     };
     
@@ -374,6 +402,8 @@ export default function App() {
     const type = presetId.includes('lofi') ? 'lofi' : 'synthwave';
     const audioUrl = preset.audioUrl || (presetId === 'cinematic-journey' ? `${baseUrl}aama.wav` : createSynthesizedAudioUrl(type));
     setAudioUrl(audioUrl);
+    setCustomAudioName(preset.title);
+    localStorage.setItem('omlila_saved_audio_name', preset.title);
   };
 
   const handleLrcFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -393,6 +423,8 @@ export default function App() {
     if (file) {
       const url = URL.createObjectURL(file);
       setAudioUrl(url);
+      setCustomAudioName(file.name);
+      localStorage.setItem('omlila_saved_audio_name', file.name);
       await saveAudioFile(file);
     }
   };
@@ -712,13 +744,21 @@ export default function App() {
 
             {/* Audio Playback Controls Bar */}
             <div className={`md-surface-container p-6 space-y-6`}>
-              {/* Timeline Slider */}
+              {/* Timeline Slider & Track Info */}
               <div className="space-y-3">
-                <div className="flex justify-between text-sm font-medium text-[var(--md-sys-color-on-surface-variant)]">
-                  <label htmlFor="playback-timeline-slider">Timeline</label>
-                  <div className="flex gap-2 tabular-nums">
+                <div className="flex justify-between items-center text-sm font-medium text-[var(--md-sys-color-on-surface-variant)]">
+                  <div className="flex items-center gap-2">
+                    <Volume2 className="w-4 h-4 text-[var(--md-sys-color-primary)]" />
+                    <span className="font-bold text-[var(--md-sys-color-on-surface)] truncate max-w-[220px]">
+                      {customAudioName}
+                    </span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-highest)] font-mono text-[var(--md-sys-color-primary)] font-bold">
+                      {isPlaying ? '▶ Playing' : '⏸ Ready'}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 tabular-nums font-mono font-bold text-[var(--md-sys-color-primary)]">
                     <span>{formatTime(currentTime)}</span>
-                    <span>/</span>
+                    <span className="text-zinc-500">/</span>
                     <span>{formatTime(duration)}</span>
                   </div>
                 </div>

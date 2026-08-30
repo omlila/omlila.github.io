@@ -7,6 +7,22 @@ export function useLyricAudioSync(
   onResumeAudio?: () => Promise<void> | void
 ) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Create audio element immediately so it exists synchronously on first render
+  if (!audioRef.current && typeof window !== 'undefined') {
+    const audio = new Audio();
+    audio.preload = 'auto';
+    if (initialAudioUrl) {
+      if (initialAudioUrl.startsWith('blob:') || initialAudioUrl.startsWith('data:')) {
+        audio.removeAttribute('crossOrigin');
+      } else {
+        audio.crossOrigin = 'anonymous';
+      }
+      audio.src = initialAudioUrl;
+    }
+    audioRef.current = audio;
+  }
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -22,12 +38,8 @@ export function useLyricAudioSync(
   const effectiveDuration = duration > 0 ? duration : lyricsDuration;
 
   useEffect(() => {
-    if (!audioRef.current) {
-      const audio = new Audio();
-      audio.preload = 'auto';
-      audioRef.current = audio;
-    }
     const audio = audioRef.current;
+    if (!audio) return;
     audio.volume = volume;
 
     const handleLoadedMetadata = () => {
@@ -48,7 +60,7 @@ export function useLyricAudioSync(
       }
     };
     const handleError = (e: Event) => {
-      console.warn('Audio element playback error, falling back to timeline timer:', e);
+      console.warn('Audio element playback notice:', e);
     };
 
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
