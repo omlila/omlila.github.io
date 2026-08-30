@@ -132,11 +132,15 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
           const media = loadedMediaCache.current.get(item.id);
           const mediaTransform = item.transform;
           
-          // Sync video smoothly with slow motion & time-stretching support
+          // Sync video smoothly with trimming, slow motion & time-stretching support
           if (media && media instanceof HTMLVideoElement && media.duration > 0) {
+            const trimStart = Math.max(0, item.trimStartSec ?? 0);
+            const trimEnd = (item.trimEndSec && item.trimEndSec > trimStart) ? Math.min(media.duration, item.trimEndSec) : media.duration;
+            const clipSpan = Math.max(0.1, trimEnd - trimStart);
+
             let effectiveSpeed = item.playbackRate ?? (style.enableVideoSlowMotion ? (style.videoPlaybackRate ?? 0.5) : 1.0);
             if (item.videoTimeStretchMode === 'auto-fit-duration' && item.durationSec > 0) {
-              effectiveSpeed = Math.min(2.0, Math.max(0.1, media.duration / item.durationSec));
+              effectiveSpeed = Math.min(2.0, Math.max(0.1, clipSpan / item.durationSec));
             } else if (item.videoTimeStretchMode === 'slow-motion') {
               effectiveSpeed = item.playbackRate || 0.5;
             }
@@ -144,13 +148,13 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
             media.playbackRate = effectiveSpeed;
 
             const timeSinceClipStart = loopedTime - accumulatedTime;
-            const expectedVideoTime = (timeSinceClipStart * effectiveSpeed) % media.duration;
+            const expectedVideoTime = trimStart + ((timeSinceClipStart * effectiveSpeed) % clipSpan);
 
             if (isPlaying) {
               if (media.paused) {
                 media.play().catch(() => {});
               }
-              // Only seek if drift is noticeable (> 0.35s) e.g. timeline scrub
+              // Only seek if drift is noticeable (> 0.35s) e.g. timeline scrub or loop jump
               if (Math.abs(media.currentTime - expectedVideoTime) > 0.35) {
                 media.currentTime = expectedVideoTime;
               }
@@ -177,9 +181,12 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
             transitionProgress = Math.max(0, Math.min(1, (loopedTime - (nextTime - crossfadeDuration)) / crossfadeDuration));
             
             if (nextMedia && nextMedia instanceof HTMLVideoElement && nextMedia.duration > 0) {
+              const nextTrimStart = Math.max(0, nextItem.trimStartSec ?? 0);
+              const nextTrimEnd = (nextItem.trimEndSec && nextItem.trimEndSec > nextTrimStart) ? Math.min(nextMedia.duration, nextItem.trimEndSec) : nextMedia.duration;
+              const nextClipSpan = Math.max(0.1, nextTrimEnd - nextTrimStart);
               const nextSpeed = nextItem.playbackRate ?? 1.0;
               nextMedia.playbackRate = nextSpeed;
-              const nextMediaLoopedTime = (transitionProgress * nextSpeed) % nextMedia.duration;
+              const nextMediaLoopedTime = nextTrimStart + ((transitionProgress * nextSpeed) % nextClipSpan);
               if (Math.abs(nextMedia.currentTime - nextMediaLoopedTime) > 0.3) {
                 nextMedia.currentTime = nextMediaLoopedTime;
               }

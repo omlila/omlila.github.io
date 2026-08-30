@@ -145,6 +145,9 @@ export interface MediaSequenceItem {
   transform?: BackgroundTransformConfig;
   playbackRate?: number; // 0.1x to 2.0x video playback speed
   videoTimeStretchMode?: 'slow-motion' | 'loop' | 'auto-fit-duration' | 'freeze-frame';
+  trimStartSec?: number; // In-point start timestamp within source video file (seconds)
+  trimEndSec?: number; // Out-point end timestamp within source video file (seconds)
+  sourceDurationSec?: number; // Full duration of original video file
 }
 
 export interface StyleConfig {

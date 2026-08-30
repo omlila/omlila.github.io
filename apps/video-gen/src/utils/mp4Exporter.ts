@@ -401,28 +401,48 @@ export async function exportLyricalVideoMP4(
       }
     }
 
-    // Precise frame-accurate video seeking for slow-motion & time-stretching
+    // Precise frame-accurate video seeking for slow-motion, trimming & time-stretching
     if (activeFrameBg instanceof HTMLVideoElement && activeFrameBg.duration > 0) {
+      const trimStart = Math.max(0, activeItemObj?.trimStartSec ?? 0);
+      const trimEnd = (activeItemObj?.trimEndSec && activeItemObj.trimEndSec > trimStart) ? Math.min(activeFrameBg.duration, activeItemObj.trimEndSec) : activeFrameBg.duration;
+      const clipSpan = Math.max(0.1, trimEnd - trimStart);
+
       let speed = activeItemObj?.playbackRate ?? (style.enableVideoSlowMotion ? (style.videoPlaybackRate ?? 0.5) : 1.0);
       if (activeItemObj?.videoTimeStretchMode === 'auto-fit-duration' && activeItemObj?.durationSec > 0) {
-        speed = Math.min(2.0, Math.max(0.1, activeFrameBg.duration / activeItemObj.durationSec));
+        speed = Math.min(2.0, Math.max(0.1, clipSpan / activeItemObj.durationSec));
       } else if (activeItemObj?.videoTimeStretchMode === 'slow-motion') {
         speed = activeItemObj?.playbackRate || 0.5;
       }
       const totalSeqDuration = mediaItems && mediaItems.length > 0 ? mediaItems.reduce((acc, item) => acc + item.durationSec, 0) : 0;
       const loopedTime = totalSeqDuration > 0 ? timeSec % totalSeqDuration : timeSec;
       const timeSinceClipStart = loopedTime - activeItemAccTime;
-      const targetTime = (timeSinceClipStart * speed) % activeFrameBg.duration;
+      const targetTime = trimStart + ((timeSinceClipStart * speed) % clipSpan);
       await seekVideoToTime(activeFrameBg, targetTime);
     }
 
     if (nextFrameBg instanceof HTMLVideoElement && nextFrameBg.duration > 0) {
+      const nextTrimStart = Math.max(0, nextItemObj?.trimStartSec ?? 0);
+      const nextTrimEnd = (nextItemObj?.trimEndSec && nextItemObj.trimEndSec > nextTrimStart) ? Math.min(nextFrameBg.duration, nextItemObj.trimEndSec) : nextFrameBg.duration;
+      const nextClipSpan = Math.max(0.1, nextTrimEnd - nextTrimStart);
       const nextSpeed = nextItemObj?.playbackRate ?? 1.0;
-      const nextTargetTime = (transitionProgress * nextSpeed) % nextFrameBg.duration;
+      const nextTargetTime = nextTrimStart + ((transitionProgress * nextSpeed) % nextClipSpan);
       await seekVideoToTime(nextFrameBg, nextTargetTime);
     }
 
-    renderLyricFrame(ctx, width, height, lyrics, timeSec, durationSec, style, activeFrameBg, nextFrameBg, transitionProgress);
+    renderLyricFrame(
+      ctx,
+      width,
+      height,
+      lyrics,
+      timeSec,
+      durationSec,
+      style,
+      activeFrameBg,
+      nextFrameBg,
+      transitionProgress,
+      activeItemObj?.transform,
+      nextItemObj?.transform
+    );
 
     const timestampMicroseconds = Math.round(timeSec * 1_000_000);
     const videoFrame = new VideoFrame(canvas, {
