@@ -134,6 +134,8 @@ export interface BackgroundTransformConfig {
   fitMode: 'cover' | 'contain' | 'custom';
 }
 
+export type SceneTransitionType = 'crossfade' | 'fade-black' | 'blur-dissolve' | 'instant-cut';
+
 export interface MediaSequenceItem {
   id: string;
   name: string;
@@ -151,6 +153,8 @@ export interface MediaSequenceItem {
   playbackDirection?: 'forward' | 'reverse' | 'ping-pong' | 'freeze-frame'; // Video direction & effect
   freezeFrameTimeSec?: number; // Specific timestamp to hold still if in freeze-frame mode
   sourceVideoId?: string; // Grouping identifier for subsections of the same video
+  transitionType?: SceneTransitionType; // Optional per-scene transition override
+  transitionDurationSec?: number; // Duration of transition into this scene (seconds)
 }
 
 export interface StyleConfig {
@@ -158,6 +162,9 @@ export interface StyleConfig {
   motionCurve?: MotionCurve; // OpenReel-inspired animation easing curves
   videoPlaybackRate?: number; // Global video speed multiplier (0.25x to 2.0x)
   enableVideoSlowMotion?: boolean; // Global video slow-motion toggle
+  sequenceTransitionType?: SceneTransitionType; // Global transition effect between scenes
+  sequenceCrossfadeDuration?: number; // 0 to 5 seconds (legacy & global crossfade duration)
+  sequenceTransitionDuration?: number; // 0 to 5 seconds global transition duration
   textPosition?: TextPositionConfig;
   backgroundTransform?: BackgroundTransformConfig;
   themePreset?: VisualThemePreset;
