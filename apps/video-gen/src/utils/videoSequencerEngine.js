@@ -1,29 +1,49 @@
 
-export function calculateEffectivePlaybackRate(item, defaultGlobalSpeed = 1.0) {
+export function calculateEffectivePlaybackRate(
+  item,
+  defaultGlobalSpeed = 1.0,
+  actualSourceDurationSec,
+  incomingTransitionDuration = 0
+) {
   const trimStart = Math.max(0, item.trimStartSec ?? 0);
+  const maxSource = (actualSourceDurationSec && actualSourceDurationSec > 0)
+    ? actualSourceDurationSec
+    : (item.sourceDurationSec ?? (trimStart + 100.0));
   const trimEnd = (item.trimEndSec && item.trimEndSec > trimStart) 
-    ? item.trimEndSec 
-    : (item.sourceDurationSec && item.sourceDurationSec > trimStart ? item.sourceDurationSec : (trimStart + 5.0));
+    ? Math.min(maxSource, item.trimEndSec) 
+    : maxSource;
   const clipSpan = Math.max(0.1, trimEnd - trimStart);
-  const durationSec = Math.max(0.1, item.durationSec ?? 5.0);
+  const totalVisibleDuration = Math.max(0.1, (item.durationSec ?? 5.0) + incomingTransitionDuration);
 
   if (item.videoTimeStretchMode === 'auto-fit-duration') {
-    const autoRate = clipSpan / durationSec;
-    return Math.max(0.05, Math.min(5.0, Number(autoRate.toFixed(3))));
+    const autoRate = clipSpan / totalVisibleDuration;
+    return Math.max(0.05, Math.min(4.0, Number(autoRate.toFixed(3))));
   }
 
   const explicitRate = item.playbackRate ?? defaultGlobalSpeed;
-  return Math.max(0.05, Math.min(5.0, explicitRate));
+  return Math.max(0.05, Math.min(4.0, explicitRate));
 }
 
-export function calculateVideoTime(item, timeInSceneSec, sourceDurationSec) {
+export function calculateVideoTime(
+  item,
+  timeInSceneSec,
+  sourceDurationSec,
+  incomingTransitionDuration = 0
+) {
   const trimStart = Math.max(0, item.trimStartSec ?? 0);
-  const maxSourceDur = sourceDurationSec ?? item.sourceDurationSec ?? (trimStart + 10.0);
+  const maxSourceDur = (sourceDurationSec && !isNaN(sourceDurationSec) && sourceDurationSec > 0)
+    ? sourceDurationSec
+    : (item.sourceDurationSec ?? (trimStart + 100.0));
   const trimEnd = (item.trimEndSec && item.trimEndSec > trimStart) 
     ? Math.min(maxSourceDur, item.trimEndSec) 
     : maxSourceDur;
   const clipSpan = Math.max(0.1, trimEnd - trimStart);
-  const speed = calculateEffectivePlaybackRate(item);
+  const totalVisibleDuration = Math.max(0.1, (item.durationSec ?? 5.0) + incomingTransitionDuration);
+
+  const speed = (item.videoTimeStretchMode === 'auto-fit-duration')
+    ? (clipSpan / totalVisibleDuration)
+    : (item.playbackRate ?? 1.0);
+
   const direction = item.playbackDirection || 'forward';
 
   if (direction === 'freeze-frame') {
@@ -34,8 +54,10 @@ export function calculateVideoTime(item, timeInSceneSec, sourceDurationSec) {
   const elapsedVirtualTime = Math.max(0, timeInSceneSec) * speed;
 
   if (direction === 'reverse') {
-    const progress = elapsedVirtualTime % clipSpan;
-    return Number((trimEnd - progress).toFixed(3));
+    const progress = (item.videoTimeStretchMode === 'auto-fit-duration')
+      ? Math.min(clipSpan, elapsedVirtualTime)
+      : (elapsedVirtualTime % clipSpan);
+    return Number(Math.max(trimStart, trimEnd - progress).toFixed(3));
   }
 
   if (direction === 'ping-pong') {
@@ -48,9 +70,11 @@ export function calculateVideoTime(item, timeInSceneSec, sourceDurationSec) {
     }
   }
 
-  // Standard forward
-  const progress = elapsedVirtualTime % clipSpan;
-  return Number((trimStart + progress).toFixed(3));
+  // Standard forward: if auto-fit, smoothly clamp to trimEnd without jump-cut loops
+  const progress = (item.videoTimeStretchMode === 'auto-fit-duration')
+    ? Math.min(clipSpan, elapsedVirtualTime)
+    : (elapsedVirtualTime % clipSpan);
+  return Number(Math.min(trimEnd, trimStart + progress).toFixed(3));
 }
 
 export function calculateSceneTransition(
@@ -70,7 +94,8 @@ export function calculateSceneTransition(
     const duration = item.durationSec || 5;
     const nextAccumulated = accumulated + duration;
 
-    if (loopedMasterTime >= accumulated && loopedMasterTime <= nextAccumulated) {
+    const isLastItem = i === mediaItems.length - 1;
+    if (loopedMasterTime >= accumulated && (isLastItem ? loopedMasterTime <= nextAccumulated : loopedMasterTime < nextAccumulated)) {
       const timeInScene = loopedMasterTime - accumulated;
       const sceneProgress = Math.min(1.0, Math.max(0.0, timeInScene / duration));
 
@@ -89,16 +114,23 @@ export function calculateSceneTransition(
         nextItem = mediaItems[nextIndex];
       }
 
+      const incomingTransitionDuration = i > 0
+        ? (mediaItems[i - 1].transitionDurationSec ?? globalTransitionDuration)
+        : 0;
+      const timeInSceneContinuous = timeInScene + incomingTransitionDuration;
+
       return {
         activeIndex: i,
         activeItem: item,
         timeInScene,
+        timeInSceneContinuous,
         sceneProgress,
         isInTransition,
         nextIndex,
         nextItem,
         transitionProgress,
-        transitionType: transType
+        transitionType: transType,
+        incomingTransitionDuration
       };
     }
 
@@ -109,10 +141,12 @@ export function calculateSceneTransition(
     activeIndex: 0,
     activeItem: mediaItems[0],
     timeInScene: 0,
+    timeInSceneContinuous: 0,
     sceneProgress: 0,
     isInTransition: false,
     transitionProgress: 0,
-    transitionType: globalTransitionType
+    transitionType: globalTransitionType,
+    incomingTransitionDuration: 0
   };
 }
 
@@ -136,7 +170,7 @@ export function autoContiguousSlice(
   return {
     ...previousItem,
     id: 'scene_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-    name: previousItem.name.replace(/ ((Continuation|Reverse|Boomerang|Freeze|Scene d+))/, '') + ' (' + (labelMap[nextDirection] || 'Next') + ')',
+    name: previousItem.name.replace(/ \((Continuation|Reverse|Boomerang|Freeze|Scene \d+)\)/, '') + ' (' + (labelMap[nextDirection] || 'Next') + ')',
     trimStartSec: nextTrimStart,
     trimEndSec: undefined,
     durationSec: Math.max(0.5, Number(sceneDurationSec.toFixed(1))),

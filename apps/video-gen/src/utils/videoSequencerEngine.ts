@@ -7,7 +7,8 @@ import type { MediaSequenceItem, SceneTransitionType } from '../types';
 export function calculateEffectivePlaybackRate(
   item: Partial<MediaSequenceItem>,
   defaultGlobalSpeed: number = 1.0,
-  actualSourceDurationSec?: number
+  actualSourceDurationSec?: number,
+  incomingTransitionDuration: number = 0
 ): number {
   const trimStart = Math.max(0, item.trimStartSec ?? 0);
   const maxSource = (actualSourceDurationSec && actualSourceDurationSec > 0)
@@ -17,10 +18,10 @@ export function calculateEffectivePlaybackRate(
     ? Math.min(maxSource, item.trimEndSec) 
     : maxSource;
   const clipSpan = Math.max(0.1, trimEnd - trimStart);
-  const durationSec = Math.max(0.1, item.durationSec ?? 5.0);
+  const totalVisibleDuration = Math.max(0.1, (item.durationSec ?? 5.0) + incomingTransitionDuration);
 
   if (item.videoTimeStretchMode === 'auto-fit-duration') {
-    const autoRate = clipSpan / durationSec;
+    const autoRate = clipSpan / totalVisibleDuration;
     return Math.max(0.05, Math.min(4.0, Number(autoRate.toFixed(3))));
   }
 
@@ -35,7 +36,8 @@ export function calculateEffectivePlaybackRate(
 export function calculateVideoTime(
   item: Partial<MediaSequenceItem>,
   timeInSceneSec: number,
-  sourceDurationSec?: number
+  sourceDurationSec?: number,
+  incomingTransitionDuration: number = 0
 ): number {
   const trimStart = Math.max(0, item.trimStartSec ?? 0);
   const maxSourceDur = (sourceDurationSec && !isNaN(sourceDurationSec) && sourceDurationSec > 0)
@@ -45,10 +47,10 @@ export function calculateVideoTime(
     ? Math.min(maxSourceDur, item.trimEndSec) 
     : maxSourceDur;
   const clipSpan = Math.max(0.1, trimEnd - trimStart);
-  const durationSec = Math.max(0.1, item.durationSec ?? 5.0);
+  const totalVisibleDuration = Math.max(0.1, (item.durationSec ?? 5.0) + incomingTransitionDuration);
 
   const speed = (item.videoTimeStretchMode === 'auto-fit-duration')
-    ? (clipSpan / durationSec)
+    ? (clipSpan / totalVisibleDuration)
     : (item.playbackRate ?? 1.0);
 
   const direction = item.playbackDirection || 'forward';
@@ -88,12 +90,14 @@ export interface ActiveSceneInfo {
   activeIndex: number;
   activeItem: MediaSequenceItem;
   timeInScene: number;
+  timeInSceneContinuous: number;
   sceneProgress: number; // 0.0 to 1.0
   isInTransition: boolean;
   nextIndex?: number;
   nextItem?: MediaSequenceItem;
   transitionProgress: number; // 0.0 to 1.0
   transitionType: SceneTransitionType;
+  incomingTransitionDuration: number;
 }
 
 /**
@@ -116,7 +120,8 @@ export function calculateSceneTransition(
     const duration = item.durationSec || 5;
     const nextAccumulated = accumulated + duration;
 
-    if (loopedMasterTime >= accumulated && loopedMasterTime <= nextAccumulated) {
+    const isLastItem = i === mediaItems.length - 1;
+    if (loopedMasterTime >= accumulated && (isLastItem ? loopedMasterTime <= nextAccumulated : loopedMasterTime < nextAccumulated)) {
       const timeInScene = loopedMasterTime - accumulated;
       const sceneProgress = Math.min(1.0, Math.max(0.0, timeInScene / duration));
 
@@ -135,16 +140,23 @@ export function calculateSceneTransition(
         nextItem = mediaItems[nextIndex];
       }
 
+      const incomingTransitionDuration = i > 0
+        ? (mediaItems[i - 1].transitionDurationSec ?? globalTransitionDuration)
+        : 0;
+      const timeInSceneContinuous = timeInScene + incomingTransitionDuration;
+
       return {
         activeIndex: i,
         activeItem: item,
         timeInScene,
+        timeInSceneContinuous,
         sceneProgress,
         isInTransition,
         nextIndex,
         nextItem,
         transitionProgress,
-        transitionType: transType
+        transitionType: transType,
+        incomingTransitionDuration
       };
     }
 
@@ -155,10 +167,12 @@ export function calculateSceneTransition(
     activeIndex: 0,
     activeItem: mediaItems[0],
     timeInScene: 0,
+    timeInSceneContinuous: 0,
     sceneProgress: 0,
     isInTransition: false,
     transitionProgress: 0,
-    transitionType: globalTransitionType
+    transitionType: globalTransitionType,
+    incomingTransitionDuration: 0
   };
 }
 

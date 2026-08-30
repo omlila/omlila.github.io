@@ -445,12 +445,23 @@ export async function exportLyricalVideoMP4(
         // Frame-accurate video seeking
         const seekTasks: Promise<void>[] = [];
         if (activeFrameBg instanceof HTMLVideoElement && activeFrameBg.duration > 0) {
-          const targetTime = calculateVideoTime(activeItemObj, sceneInfo.timeInScene, activeFrameBg.duration);
+          const targetTime = calculateVideoTime(
+            activeItemObj, 
+            sceneInfo.timeInSceneContinuous, 
+            activeFrameBg.duration, 
+            sceneInfo.incomingTransitionDuration
+          );
           seekTasks.push(seekVideoToTime(activeFrameBg, targetTime));
         }
 
         if (nextFrameBg instanceof HTMLVideoElement && nextFrameBg.duration > 0 && nextItemObj) {
-          const nextTargetTime = calculateVideoTime(nextItemObj, transitionProgress * (nextItemObj.transitionDurationSec ?? 0.8), nextFrameBg.duration);
+          const incomingTransDur = activeItemObj?.transitionDurationSec ?? (style.sequenceTransitionDuration ?? 0.8);
+          const nextTargetTime = calculateVideoTime(
+            nextItemObj, 
+            transitionProgress * incomingTransDur, 
+            nextFrameBg.duration, 
+            incomingTransDur
+          );
           seekTasks.push(seekVideoToTime(nextFrameBg, nextTargetTime));
         }
 

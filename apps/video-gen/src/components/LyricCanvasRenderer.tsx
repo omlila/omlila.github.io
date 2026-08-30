@@ -227,10 +227,10 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
         // Sync video smoothly with direction, trimming, slow motion & time-stretching support
         if (media && media instanceof HTMLVideoElement) {
           const vidDuration = (media.duration && !isNaN(media.duration) && media.duration > 0) ? media.duration : 100;
-          const effectiveSpeed = calculateEffectivePlaybackRate(item, style.videoPlaybackRate ?? 1.0, vidDuration);
+          const effectiveSpeed = calculateEffectivePlaybackRate(item, style.videoPlaybackRate ?? 1.0, vidDuration, sceneInfo.incomingTransitionDuration);
           media.playbackRate = effectiveSpeed;
 
-          const expectedVideoTime = calculateVideoTime(item, sceneInfo.timeInScene, vidDuration);
+          const expectedVideoTime = calculateVideoTime(item, sceneInfo.timeInSceneContinuous, vidDuration, sceneInfo.incomingTransitionDuration);
           const direction = item.playbackDirection || 'forward';
 
           if (isPlaying) {
@@ -272,11 +272,17 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
 
           if (nextMedia && nextMedia instanceof HTMLVideoElement) {
             const nextDuration = (nextMedia.duration && !isNaN(nextMedia.duration) && nextMedia.duration > 0) ? nextMedia.duration : 100;
-            const nextExpectedTime = calculateVideoTime(nextItem, sceneInfo.transitionProgress * (nextItem.transitionDurationSec ?? 0.8), nextDuration);
+            const incomingTransDur = item.transitionDurationSec ?? (style.sequenceTransitionDuration ?? 0.8);
+            const nextExpectedTime = calculateVideoTime(
+              nextItem, 
+              sceneInfo.transitionProgress * incomingTransDur, 
+              nextDuration, 
+              incomingTransDur
+            );
             const nextDir = nextItem.playbackDirection || 'forward';
 
             if (isPlaying && nextDir === 'forward') {
-              nextMedia.playbackRate = calculateEffectivePlaybackRate(nextItem, style.videoPlaybackRate ?? 1.0, nextDuration);
+              nextMedia.playbackRate = calculateEffectivePlaybackRate(nextItem, style.videoPlaybackRate ?? 1.0, nextDuration, incomingTransDur);
               if (nextMedia.paused) {
                 nextMedia.play().catch(() => {});
               }

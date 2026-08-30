@@ -88,3 +88,27 @@ test("autoContiguousSlice spawns contiguous next scene with correct In-Point", (
   assert.equal(nextScene.playbackDirection, "reverse");
   assert.equal(nextScene.durationSec, 5.0);
 });
+
+test("calculateSceneTransition provides continuous playback time across transitions without restart", () => {
+  const items = [
+    { id: "s1", name: "Scene 1", type: "video", url: "1.mp4", durationSec: 10, transitionDurationSec: 1.0 },
+    { id: "s2", name: "Scene 2", type: "video", url: "2.mp4", durationSec: 10, transitionDurationSec: 1.0 }
+  ];
+
+  // At t = 9.5s (inside transition from Scene 1 to Scene 2, progress = 0.5)
+  const transInfo = calculateSceneTransition(9.5, items, 1.0);
+  assert.equal(transInfo.isInTransition, true);
+  assert.equal(transInfo.transitionProgress, 0.5);
+
+  // Incoming video time at end of transition (t = 10.0s, p = 1.0)
+  const incomingTimeAtEnd = calculateVideoTime(items[1], 1.0 * 1.0, 20, 1.0);
+  
+  // Active video time right as Scene 2 begins (t = 10.0s, timeInScene = 0.0)
+  const s2Info = calculateSceneTransition(10.0, items, 1.0);
+  assert.equal(s2Info.activeIndex, 1);
+  const activeTimeAtStart = calculateVideoTime(items[1], s2Info.timeInSceneContinuous, 20, s2Info.incomingTransitionDuration);
+
+  // MUST BE 100% CONTINUOUS AND NOT RESTART AT 0!
+  assert.equal(incomingTimeAtEnd, activeTimeAtStart);
+  assert.ok(activeTimeAtStart > 0, "Video did not restart at 0");
+});
