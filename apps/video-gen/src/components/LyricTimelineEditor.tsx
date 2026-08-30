@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import type { LyricLine } from '../types';
-import { Plus, Trash2, Clock, Play, FileText, Upload, Download, Sparkles, ChevronDown, ChevronUp, RotateCcw, Crosshair } from 'lucide-react';
+import type { LyricLine, LyricLineRole } from '../types';
+import { Plus, Trash2, Clock, Play, FileText, Upload, Download, Sparkles, ChevronDown, ChevronUp, RotateCcw, Crosshair, Heart } from 'lucide-react';
 import { parseLyricCues, formatLyricCuesToLrc, formatLyricCuesToSrt, formatLyricCuesToVtt } from '../utils/lrcParser';
 import { SAMPLE_PRESETS } from '../data/samplePresets';
 
@@ -26,6 +26,7 @@ export const LyricTimelineEditor: React.FC<LyricTimelineEditorProps> = ({
   currentTime = 0,
 }) => {
   const [showRawEditor, setShowRawEditor] = useState(false);
+  const [expandedStyleId, setExpandedStyleId] = useState<string | null>(null);
 
   const updateLineText = (id: string, text: string) => {
     onUpdateLyrics(lyrics.map((l) => (l.id === id ? { ...l, text } : l)));
@@ -37,8 +38,104 @@ export const LyricTimelineEditor: React.FC<LyricTimelineEditorProps> = ({
     );
   };
 
+  const updateLineRole = (id: string, role: LyricLineRole) => {
+    onUpdateLyrics(
+      lyrics.map((l) => {
+        if (l.id !== id) return l;
+        if (role === 'dedication') {
+          return {
+            ...l,
+            role,
+            customPosition: 'center',
+            customColor: '#fef08a',
+            customFontFamily: 'Tiro Devanagari Hindi',
+            customFontStyle: 'italic',
+            customFontSize: 46,
+            customGlowColor: 'rgba(251, 191, 36, 0.45)',
+            customGlowIntensity: 18,
+            customAnimation: 'cinematic-dissolve'
+          };
+        }
+        if (role === 'title') {
+          return {
+            ...l,
+            role,
+            customPosition: 'center',
+            customColor: '#ffffff',
+            customFontWeight: 'bold',
+            customFontSize: 52,
+            customScaleMultiplier: 1.3,
+            customAnimation: 'cinematic-dissolve'
+          };
+        }
+        if (role === 'chorus-highlight') {
+          return {
+            ...l,
+            role,
+            customPosition: 'bottom',
+            customColor: '#fde047',
+            customScaleMultiplier: 1.18,
+            customGlowColor: 'rgba(250, 204, 21, 0.5)',
+            customGlowIntensity: 15
+          };
+        }
+        if (role === 'poetic') {
+          return {
+            ...l,
+            role,
+            customFontFamily: 'Tiro Devanagari Hindi',
+            customFontStyle: 'italic',
+            customColor: '#fef08a'
+          };
+        }
+        return {
+          ...l,
+          role: 'normal',
+          customPosition: undefined,
+          customColor: undefined,
+          customFontFamily: undefined,
+          customFontStyle: undefined,
+          customFontSize: undefined,
+          customGlowColor: undefined,
+          customGlowIntensity: undefined,
+          customScaleMultiplier: undefined
+        };
+      })
+    );
+  };
+
+  const updateLineCustomProp = (id: string, prop: keyof LyricLine, value: any) => {
+    onUpdateLyrics(
+      lyrics.map((l) => (l.id === id ? { ...l, [prop]: value } : l))
+    );
+  };
+
   const deleteLine = (id: string) => {
     onUpdateLyrics(lyrics.filter((l) => l.id !== id));
+  };
+
+  const addDedicationCard = () => {
+    const lastEnd = lyrics.length > 0 ? lyrics[lyrics.length - 1].endTime : 0;
+    const songEnd = audioDuration && audioDuration > 0 ? audioDuration : (lastEnd + 6.0);
+    const start = Math.max(lastEnd + 0.2, Number((songEnd - 5.5).toFixed(2)));
+    const end = Number(songEnd.toFixed(2));
+
+    const newLine: LyricLine = {
+      id: `dedication_${Date.now()}`,
+      startTime: start,
+      endTime: end,
+      text: 'सबै माया गर्ने मुटुहरूलाई समर्पित, Keep Loving ❤️',
+      role: 'dedication',
+      customPosition: 'center',
+      customColor: '#fef08a',
+      customFontFamily: 'Tiro Devanagari Hindi',
+      customFontStyle: 'italic',
+      customFontSize: 46,
+      customGlowColor: 'rgba(251, 191, 36, 0.45)',
+      customGlowIntensity: 18,
+      customAnimation: 'cinematic-dissolve'
+    };
+    onUpdateLyrics([...lyrics, newLine]);
   };
 
   const addLine = () => {
@@ -363,17 +460,126 @@ export const LyricTimelineEditor: React.FC<LyricTimelineEditorProps> = ({
                 </div>
               </div>
 
-              {/* Text Input */}
-              <input
-                type="text"
-                value={line.text}
-                onChange={(e) => updateLineText(line.id, e.target.value)}
-                aria-label={`Lyric text for cue line ${idx + 1}`}
-                className="w-full bg-[var(--md-sys-color-surface-container-highest)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-3 py-2 rounded-lg text-sm font-bold focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)] focus-visible:outline-none"
-              />
+              {/* Text Input & Special Line Tag */}
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={line.text}
+                  onChange={(e) => updateLineText(line.id, e.target.value)}
+                  aria-label={`Lyric text for cue line ${idx + 1}`}
+                  className="w-full bg-[var(--md-sys-color-surface-container-highest)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-3 py-2 rounded-lg text-sm font-bold focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)] focus-visible:outline-none"
+                />
+
+                {/* Per-Line Role & Style Controls Toolbar */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">Role:</span>
+                    <select
+                      value={line.role || 'normal'}
+                      onChange={(e) => updateLineRole(line.id, e.target.value as LyricLineRole)}
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded border focus:outline-none cursor-pointer ${
+                        line.role === 'dedication'
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
+                          : line.role === 'title'
+                          ? 'bg-blue-500/20 text-blue-300 border-blue-500/50'
+                          : line.role === 'chorus-highlight'
+                          ? 'bg-purple-500/20 text-purple-300 border-purple-500/50'
+                          : line.role === 'poetic'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+                          : 'bg-[var(--md-sys-color-surface-container-highest)] text-[var(--md-sys-color-on-surface-variant)] border-[var(--md-sys-color-outline-variant)]'
+                      }`}
+                    >
+                      <option value="normal">🏷️ Default Subtitle</option>
+                      <option value="dedication">🎬 Dedication / Outro Card</option>
+                      <option value="title">🎵 Song Title Card</option>
+                      <option value="chorus-highlight">🔥 Chorus Climax</option>
+                      <option value="poetic">🕊️ Poetic Serif</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    {line.role && line.role !== 'normal' && (
+                      <span className="text-[10px] font-mono text-amber-400 font-bold hidden sm:inline">
+                        {line.role === 'dedication' ? '✨ Center Screen • Gold • Dissolve' : line.role === 'title' ? '✨ Center Title' : '✨ Special Effect'}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setExpandedStyleId(expandedStyleId === line.id ? null : line.id)}
+                      className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--md-sys-color-surface-container)] hover:bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-primary)] border border-[var(--md-sys-color-outline-variant)] flex items-center gap-1 cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>{expandedStyleId === line.id ? 'Close Style' : 'Customize Style'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Expanded Fine-Tuning Drawer for this Line */}
+                {expandedStyleId === line.id && (
+                  <div className="p-3 bg-[var(--md-sys-color-surface-container-highest)]/80 rounded-lg border border-[var(--md-sys-color-outline-variant)] space-y-2 mt-2 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-[var(--md-sys-color-on-surface-variant)] block mb-1">Position Preset</label>
+                        <select
+                          value={line.customPosition || (line.role === 'dedication' || line.role === 'title' ? 'center' : 'bottom')}
+                          onChange={(e) => updateLineCustomProp(line.id, 'customPosition', e.target.value)}
+                          className="w-full bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-2 py-1 rounded text-xs"
+                        >
+                          <option value="bottom">Bottom (Subtitle)</option>
+                          <option value="center">Center Screen (Cinema Card)</option>
+                          <option value="top">Top</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-[var(--md-sys-color-on-surface-variant)] block mb-1">Custom Text Color</label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="color"
+                            value={line.customColor || '#fef08a'}
+                            onChange={(e) => updateLineCustomProp(line.id, 'customColor', e.target.value)}
+                            className="w-6 h-6 rounded border-0 cursor-pointer bg-transparent"
+                          />
+                          <input
+                            type="text"
+                            value={line.customColor || ''}
+                            placeholder="Default color"
+                            onChange={(e) => updateLineCustomProp(line.id, 'customColor', e.target.value)}
+                            className="flex-1 bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-1.5 py-0.5 rounded text-xs font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-[var(--md-sys-color-on-surface-variant)] block mb-1">Font Size (px)</label>
+                        <input
+                          type="number"
+                          min={20}
+                          max={100}
+                          value={line.customFontSize || 42}
+                          onChange={(e) => updateLineCustomProp(line.id, 'customFontSize', Number(e.target.value))}
+                          className="w-full bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-2 py-1 rounded text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           ))
         )}
+      </div>
+
+      {/* Add Dedication Card Bottom Action */}
+      <div className="flex justify-end pt-1">
+        <button
+          type="button"
+          onClick={addDedicationCard}
+          className="md-button-tonal flex items-center gap-1.5 text-xs font-bold text-amber-300 hover:bg-amber-500/20 border border-amber-500/30"
+        >
+          <Heart className="w-4 h-4 text-rose-400" />
+          <span>+ Add Outro Dedication Card</span>
+        </button>
       </div>
     </div>
   );

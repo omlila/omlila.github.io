@@ -4,12 +4,29 @@ export interface LyricWord {
   endTime: number; // in seconds
 }
 
+export type LyricLineRole = 'normal' | 'dedication' | 'title' | 'chorus-highlight' | 'poetic';
+
 export interface LyricLine {
   id: string;
   startTime: number; // in seconds
   endTime: number; // in seconds
   text: string;
   words?: LyricWord[]; // Optional word-level karaoke sync
+  // Per-line custom style overrides
+  role?: LyricLineRole;
+  customPosition?: 'top' | 'center' | 'bottom';
+  customAnimation?: TextStyleAnimation | 'cinematic-dissolve' | 'gold-shimmer';
+  customColor?: string;
+  customActiveColor?: string;
+  customFontSize?: number;
+  customFontFamily?: string;
+  customFontWeight?: 'normal' | 'bold' | '800' | '900';
+  customFontStyle?: 'normal' | 'italic';
+  customGlowColor?: string;
+  customGlowIntensity?: number;
+  customStrokeColor?: string;
+  customStrokeWidth?: number;
+  customScaleMultiplier?: number;
 }
 
 export type AspectRatio = '9:16' | '16:9' | '1:1';

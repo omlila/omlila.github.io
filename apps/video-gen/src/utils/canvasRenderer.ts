@@ -498,8 +498,6 @@ export function renderLyricFrame(
   const fontScaleMulti = style.textPosition?.scale ?? 1.0;
   const baseScale = (width / 1080) * fontScaleMulti;
   const fontSizePx = Math.round(style.fontSize * baseScale);
-  const strokeWidthPx = Math.round((style.strokeWidth || 4) * baseScale);
-  const glowIntensityPx = Math.round((style.glowIntensity || 20) * baseScale);
 
   ctx.font = `${style.fontStyle || 'normal'} ${style.fontWeight || 'bold'} ${fontSizePx}px "${style.fontFamily || 'Inter'}", sans-serif`;
   ctx.textAlign = style.textAlign || 'center';
@@ -551,9 +549,17 @@ export function renderLyricFrame(
     ctx.restore();
   }
 
-  // Render Each Line with Smooth Continuous Easing
+  // Render Each Line with Smooth Continuous Easing & Per-Line Overrides
   visibleLines.forEach((line, idx) => {
-    const lineY = startY + idx * lineSpacing;
+    // Dynamic Per-Line Font Metrics
+    const lineFontFamily = line.customFontFamily || (line.role === 'dedication' || line.role === 'poetic' ? 'Tiro Devanagari Hindi' : (style.fontFamily || 'Inter'));
+    const lineScaleBoost = line.customScaleMultiplier ?? (line.role === 'title' ? 1.3 : line.role === 'chorus-highlight' ? 1.15 : 1.0);
+    const lineFontSizePx = Math.round((line.customFontSize ? line.customFontSize * (width / 1080) : fontSizePx) * lineScaleBoost);
+    const lineFontWeight = line.customFontWeight || (line.role === 'title' ? 'bold' : (style.fontWeight || 'bold'));
+    const lineFontStyle = line.customFontStyle || (line.role === 'poetic' || line.role === 'dedication' ? 'italic' : (style.fontStyle || 'normal'));
+
+    ctx.font = `${lineFontStyle} ${lineFontWeight} ${lineFontSizePx}px "${lineFontFamily}", sans-serif`;
+
     const isCurrentlyActive = currentTime >= line.startTime && currentTime <= line.endTime;
     const isPast = currentTime > line.endTime;
 
@@ -568,9 +574,22 @@ export function renderLyricFrame(
 
     const lineProgress = applyMotionCurve(rawProgress, style.motionCurve);
 
+    // Position Calculation: Support per-line custom positions & center screen dedication/title cards
+    const isCenterCard = line.role === 'dedication' || line.role === 'title' || line.customPosition === 'center';
+    const isTopCard = line.customPosition === 'top';
+
+    let lineY = startY + idx * lineSpacing;
+    if (isCenterCard) {
+      lineY = height * 0.50;
+    } else if (isTopCard) {
+      lineY = height * 0.22;
+    }
+
     const safeZone = (style.lyricsSafeZonePercent ?? 5) / 100;
     let posX = width * ((style.textPosition?.offsetXPercent ?? 50) / 100);
-    if (posPreset !== 'custom') {
+    if (isCenterCard) {
+      posX = width * 0.5;
+    } else if (posPreset !== 'custom') {
       if (style.textAlign === 'left') posX = width * (safeZone + 0.05);
       else if (style.textAlign === 'right') posX = width * (1.0 - safeZone - 0.05);
       else posX = width * 0.5;
@@ -586,11 +605,11 @@ export function renderLyricFrame(
     ctx.scale(scaleFactor, scaleFactor);
 
     // Smooth Entrance Fade, Slide Offset & Focus Scale
-    // B3: Perspective fade - lines further from active get dimmer
     let perspectiveDist = Math.abs(idx - visibleLines.findIndex((l2) => currentTime >= l2.startTime && currentTime <= l2.endTime));
     if (perspectiveDist < 0) perspectiveDist = 0;
     const perspectiveFade = style.enableLinePerspectiveFade ? Math.max(0.15, 1.0 - perspectiveDist * (style.perspectiveFadeStrength ?? 0.3)) : 1.0;
     let fadeAlpha = isCurrentlyActive ? 1.0 : isPast ? (0.45 * perspectiveFade) : (0.25 * perspectiveFade);
+
     if (shouldHideInactive && !isCurrentlyActive) {
       if (isPast && currentTime <= line.endTime + 0.25) {
         fadeAlpha = Math.max(0.0, 1.0 - (currentTime - line.endTime) / 0.25);
@@ -598,13 +617,27 @@ export function renderLyricFrame(
         fadeAlpha = 0.0;
       }
     }
-    const isCleanSubtitle = style.animationType === 'clean-subtitle';
+
+    // Special Smooth Cinematic Dissolve for Dedication & Title Cards
+    if (isCurrentlyActive && (line.role === 'dedication' || line.role === 'title' || line.customAnimation === 'cinematic-dissolve')) {
+      const elapsed = currentTime - line.startTime;
+      const remaining = line.endTime - currentTime;
+      if (elapsed < 1.0) {
+        fadeAlpha = Math.max(0.0, Math.min(1.0, elapsed / 1.0));
+      } else if (remaining < 1.0) {
+        fadeAlpha = Math.max(0.0, Math.min(1.0, remaining / 1.0));
+      } else {
+        fadeAlpha = 1.0;
+      }
+    }
+
+    const isCleanSubtitle = style.animationType === 'clean-subtitle' || line.role === 'dedication';
     const activeExtraScale = isCleanSubtitle ? 1.0 : (style.enableFontWeightPop ? (style.activeLineExtraScale ?? 1.1) : 1.05);
-    // B1: Beat-sync drives scale pulse on active line
     const beatScaleBoost = (!isCleanSubtitle && style.enableBeatSync && (style.beatSyncTarget ?? 'lyrics') !== 'background')
       ? beatStrength * 0.08 : 0;
-    let focusScale = isCurrentlyActive ? (activeExtraScale + beatScaleBoost) : (isCleanSubtitle ? 1.0 : 0.90); // scale up active, shrink inactive
-    if (isCurrentlyActive && rawProgress < 0.15) {
+    let focusScale = isCurrentlyActive ? (activeExtraScale + beatScaleBoost) : (isCleanSubtitle ? 1.0 : 0.90);
+    
+    if (isCurrentlyActive && rawProgress < 0.15 && line.role !== 'dedication' && line.role !== 'title') {
       const enterRatio = rawProgress / 0.15;
       const transStyle = style.lineTransitionStyle ?? 'dissolve';
       if (transStyle === 'instant') {
@@ -613,12 +646,7 @@ export function renderLyricFrame(
       } else if (transStyle === 'zoom-in') {
         fadeAlpha = 0.5 + enterRatio * 0.5;
         focusScale = 0.6 + enterRatio * (activeExtraScale - 0.6);
-      } else if (transStyle === 'wipe-right') {
-        // Handled via clip in rendering; just fade here
-        fadeAlpha = enterRatio;
-        focusScale = activeExtraScale;
       } else {
-        // Default: dissolve
         fadeAlpha = 0.3 + enterRatio * 0.7;
         focusScale = 0.90 + enterRatio * 0.15;
       }
@@ -711,17 +739,23 @@ export function renderLyricFrame(
       }
     }
 
-    // High-Performance Multi-Layer Glow
-    if (style.glowIntensity > 0 && displayLineText.length > 0) {
+    // High-Performance Multi-Layer Glow (with per-line dedication/role support)
+    const lineGlowIntensityPx = (line.customGlowIntensity !== undefined ? line.customGlowIntensity : (line.role === 'dedication' ? 16 : (style.glowIntensity || 0))) * baseScale;
+    const lineGlowColor = line.customGlowColor || (line.role === 'dedication' ? 'rgba(251, 191, 36, 0.45)' : (style.glowColor || style.activeTextColor));
+    const lineStrokeWidthPx = (line.customStrokeWidth !== undefined ? line.customStrokeWidth : (style.strokeWidth || 4)) * baseScale;
+    const lineStrokeColor = line.customStrokeColor || (style.strokeColor || '#000000');
+    const lineTextColor = line.customColor || (line.role === 'dedication' ? '#fef08a' : (isCurrentlyActive ? style.activeTextColor : style.textColor));
+
+    if (lineGlowIntensityPx > 0 && displayLineText.length > 0) {
       ctx.save();
       ctx.shadowColor = 'transparent';
       ctx.shadowBlur = 0;
-      ctx.strokeStyle = style.glowColor || style.activeTextColor;
-      let pulseGlow = glowIntensityPx;
+      ctx.strokeStyle = lineGlowColor;
+      let pulseGlow = lineGlowIntensityPx;
       if (style.animationType === 'neon-pulse' && isCurrentlyActive) {
-        pulseGlow = glowIntensityPx * (1 + Math.sin(currentTime * 15) * 0.6);
+        pulseGlow = lineGlowIntensityPx * (1 + Math.sin(currentTime * 15) * 0.6);
       }
-      ctx.lineWidth = strokeWidthPx + Math.round(pulseGlow * (isCurrentlyActive ? 0.6 : 0.2));
+      ctx.lineWidth = lineStrokeWidthPx + Math.round(pulseGlow * (isCurrentlyActive ? 0.6 : 0.2));
       ctx.globalAlpha = (ctx.globalAlpha * (isCurrentlyActive ? 0.35 : 0.15));
       ctx.strokeText(displayLineText, renderPosX, renderLineY);
       ctx.restore();
@@ -758,15 +792,15 @@ export function renderLyricFrame(
       ctx.shadowOffsetY = 0;
     }
 
-    if (strokeWidthPx > 0 && displayLineText.length > 0) {
-      ctx.strokeStyle = style.strokeColor || '#000000';
-      ctx.lineWidth = strokeWidthPx;
+    if (lineStrokeWidthPx > 0 && displayLineText.length > 0) {
+      ctx.strokeStyle = lineStrokeColor;
+      ctx.lineWidth = lineStrokeWidthPx;
       ctx.strokeText(displayLineText, renderPosX, renderLineY);
     }
 
-    // Base inactive text fill (Feature 4: Gradient Text support)
+    // Base text fill
     if (displayLineText.length > 0) {
-      if (style.enableGradientText && style.gradientTextFrom && style.gradientTextTo) {
+      if (style.enableGradientText && style.gradientTextFrom && style.gradientTextTo && !line.customColor) {
         const angleRad = ((style.gradientTextAngle ?? 0) * Math.PI) / 180;
         const textW = ctx.measureText(displayLineText).width / totalScale;
         const gx1 = renderPosX - (Math.cos(angleRad) * textW) / 2;
@@ -778,7 +812,7 @@ export function renderLyricFrame(
         textGrad.addColorStop(1, style.gradientTextTo);
         ctx.fillStyle = textGrad;
       } else {
-        ctx.fillStyle = style.textColor;
+        ctx.fillStyle = lineTextColor;
       }
       ctx.fillText(displayLineText, renderPosX, renderLineY);
     }
