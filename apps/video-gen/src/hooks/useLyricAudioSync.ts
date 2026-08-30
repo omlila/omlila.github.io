@@ -110,8 +110,8 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
   // Calculate active line and word
   useEffect(() => {
     if (!lyrics || lyrics.length === 0) {
-      setActiveLineIndex(-1);
-      setActiveWordIndex(-1);
+      setActiveLineIndex((prev) => (prev !== -1 ? -1 : prev));
+      setActiveWordIndex((prev) => (prev !== -1 ? -1 : prev));
       return;
     }
 
@@ -128,17 +128,17 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
       }
     }
 
-    setActiveLineIndex(lineIdx);
+    setActiveLineIndex((prev) => (prev !== lineIdx ? lineIdx : prev));
 
+    let wordIdx = -1;
     if (lineIdx !== -1 && lyrics[lineIdx].words && lyrics[lineIdx].words!.length > 0) {
       const words = lyrics[lineIdx].words!;
-      const wordIdx = words.findIndex(
+      const foundIdx = words.findIndex(
         (w) => currentTime >= w.startTime && currentTime <= w.endTime
       );
-      setActiveWordIndex(wordIdx !== -1 ? wordIdx : 0);
-    } else {
-      setActiveWordIndex(-1);
+      wordIdx = foundIdx !== -1 ? foundIdx : 0;
     }
+    setActiveWordIndex((prev) => (prev !== wordIdx ? wordIdx : prev));
   }, [currentTime, lyrics]);
 
   const play = useCallback(async () => {

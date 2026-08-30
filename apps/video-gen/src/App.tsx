@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { AspectRatio, AppWorkspaceTheme, ExportConfig, ExportStatus, LyricLine, MediaSequenceItem, ResolutionQuality, StyleConfig } from './types';
 import { QUALITY_CONFIGS } from './types';
 import { WORKSPACE_THEMES } from './data/appThemes';
@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 
 import { getMediaFile, getAudioFile, saveAudioFile, saveMediaFile } from './utils/mediaStore';
-import { registerStudioBridge, notifyStudioStateChange } from './automation/omlilaStudioBridge';
+import { registerStudioBridge } from './automation/omlilaStudioBridge';
 
 export default function App() {
   const isLyricistEnabled = import.meta.env.VITE_ENABLE_AI_LYRICIST === 'true';
@@ -412,23 +412,41 @@ export default function App() {
     }
   };
 
+  const latestStateRef = useRef({
+    lyrics,
+    lrcText: lrcInputText,
+    aspectRatio,
+    styleConfig,
+    workspaceTheme,
+    mediaItems,
+    bgMediaUrl,
+    isPlaying,
+    currentTime,
+    duration,
+    bpm: beatSync.bpm,
+    beatStrength: beatSync.beatStrength,
+    isReady: true,
+  });
+
+  latestStateRef.current = {
+    lyrics,
+    lrcText: lrcInputText,
+    aspectRatio,
+    styleConfig,
+    workspaceTheme,
+    mediaItems,
+    bgMediaUrl,
+    isPlaying,
+    currentTime,
+    duration,
+    bpm: beatSync.bpm,
+    beatStrength: beatSync.beatStrength,
+    isReady: true,
+  };
+
   useEffect(() => {
-    const bridge = registerStudioBridge({
-      getState: () => ({
-        lyrics,
-        lrcText: lrcInputText,
-        aspectRatio,
-        styleConfig,
-        workspaceTheme,
-        mediaItems,
-        bgMediaUrl,
-        isPlaying,
-        currentTime,
-        duration,
-        bpm: beatSync.bpm,
-        beatStrength: beatSync.beatStrength,
-        isReady: true,
-      }),
+    registerStudioBridge({
+      getState: () => latestStateRef.current,
       setLyrics: (lrc) => handleLrcTextChange(lrc),
       setTheme: (themeId) => {
         const theme = THEME_PRESETS.find((t) => t.id === themeId);
@@ -472,23 +490,7 @@ export default function App() {
     (window as any).triggerStudioExport = handleStartExport;
     (window as any).runDirectExport = () => exportLyricalVideoMP4(lyrics, audioUrl || '', styleConfig, exportConfig, undefined, undefined, mediaItems);
     (window as any).exportLyricalVideoMP4 = exportLyricalVideoMP4;
-
-    notifyStudioStateChange(bridge.getState());
-  }, [
-    lyrics,
-    lrcInputText,
-    aspectRatio,
-    styleConfig,
-    workspaceTheme,
-    mediaItems,
-    bgMediaUrl,
-    isPlaying,
-    currentTime,
-    duration,
-    beatSync.bpm,
-    beatSync.beatStrength,
-    audioUrl,
-  ]);
+  }, []);
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);

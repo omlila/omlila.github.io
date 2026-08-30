@@ -3,12 +3,13 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 /**
  * useBeatSync - Web Audio API beat detection hook.
  * Connects to an HTMLAudioElement, runs an AnalyserNode, and
- * emits a real-time beatStrength (0-1) that can drive lyric animations.
+ * provides smooth real-time beat energy without causing React infinite render cascades.
  */
 export interface BeatSyncState {
-  beatStrength: number;   // 0.0 to 1.0 - current beat energy
+  beatStrength: number;   // 0.0 to 1.0 (throttled for UI)
   bpm: number;            // Estimated BPM (0 if not detected)
   isConnected: boolean;
+  getBeatStrength: () => number; // Real-time 60fps for Canvas rendering
   connectToAudio: (audio: HTMLAudioElement) => void;
   disconnect: () => void;
   resumeAudioContext: () => Promise<void>;
@@ -22,6 +23,9 @@ export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSy
   const connectedAudioRef = useRef<HTMLAudioElement | null>(null);
   const beatHistoryRef = useRef<number[]>([]);
   const lastBeatTimeRef = useRef<number>(0);
+  const beatStrengthRef = useRef<number>(0);
+  const bpmRef = useRef<number>(0);
+  const lastUiUpdateRef = useRef<number>(0);
 
   const [beatStrength, setBeatStrength] = useState(0);
   const [bpm, setBpm] = useState(0);
@@ -55,7 +59,7 @@ export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSy
 
     // Beat is a transient - bass peak significantly above average
     const rawBeat = Math.min(1.0, bassAvg * 2.0 * sensitivity);
-    setBeatStrength(rawBeat);
+    beatStrengthRef.current = rawBeat;
 
     // BPM estimation: track intervals between strong beats
     const now = performance.now();
@@ -65,9 +69,16 @@ export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSy
       if (interval > 200 && interval < 2000) {
         beatHistoryRef.current.push(60000 / interval);
         if (beatHistoryRef.current.length > 8) beatHistoryRef.current.shift();
-        const avgBpm = beatHistoryRef.current.reduce((a, b) => a + b, 0) / beatHistoryRef.current.length;
-        setBpm(Math.round(avgBpm));
+        const avgBpm = Math.round(beatHistoryRef.current.reduce((a, b) => a + b, 0) / beatHistoryRef.current.length);
+        bpmRef.current = avgBpm;
       }
+    }
+
+    // Only update React state at throttled ~10 FPS to prevent render loops
+    if (now - lastUiUpdateRef.current > 100) {
+      lastUiUpdateRef.current = now;
+      setBeatStrength(Math.round(rawBeat * 10) / 10);
+      setBpm(bpmRef.current);
     }
 
     rafRef.current = requestAnimationFrame(analyseFrame);
@@ -78,7 +89,6 @@ export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSy
     if (connectedAudioRef.current === audio && isConnected) return;
 
     try {
-      // Create or reuse AudioContext
       if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
         const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioCtxClass) {
@@ -88,12 +98,6 @@ export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSy
       const audioCtx = audioCtxRef.current;
       if (!audioCtx) return;
 
-      // Resume if suspended on user gesture
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume().catch(() => {});
-      }
-
-      // Create analyser if needed
       if (!analyserRef.current) {
         analyserRef.current = audioCtx.createAnalyser();
         analyserRef.current.fftSize = 2048;
@@ -101,22 +105,19 @@ export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSy
         analyserRef.current.connect(audioCtx.destination);
       }
 
-      // Connect audio element if not already connected
       if (!sourceRef.current && audio) {
         try {
           const source = audioCtx.createMediaElementSource(audio);
           source.connect(analyserRef.current);
           sourceRef.current = source;
         } catch (e) {
-          // May already be connected to another node
-          console.warn('[BeatSync] MediaElement already connected or restricted:', e);
+          console.warn('[BeatSync] MediaElement already connected:', e);
         }
       }
 
       connectedAudioRef.current = audio;
       setIsConnected(true);
 
-      // Start analysis loop
       cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(analyseFrame);
     } catch (err) {
@@ -128,14 +129,15 @@ export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSy
     cancelAnimationFrame(rafRef.current);
     connectedAudioRef.current = null;
     setIsConnected(false);
-    setBeatStrength(0);
-    setBpm(0);
+    beatStrengthRef.current = 0;
+    bpmRef.current = 0;
   }, []);
 
   useEffect(() => {
     if (!enabled) {
       cancelAnimationFrame(rafRef.current);
-      setBeatStrength(0);
+      beatStrengthRef.current = 0;
+      bpmRef.current = 0;
     }
   }, [enabled]);
 
@@ -148,5 +150,13 @@ export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSy
     };
   }, []);
 
-  return { beatStrength, bpm, isConnected, connectToAudio, disconnect, resumeAudioContext };
+  return {
+    beatStrength,
+    bpm,
+    isConnected,
+    getBeatStrength: () => beatStrengthRef.current,
+    connectToAudio,
+    disconnect,
+    resumeAudioContext,
+  };
 }
