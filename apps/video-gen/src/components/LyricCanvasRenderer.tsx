@@ -132,11 +132,12 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
           const media = loadedMediaCache.current.get(item.id);
           const mediaTransform = item.transform;
           
-          // Sync video smoothly with trimming, slow motion & time-stretching support
+          // Sync video smoothly with direction, trimming, slow motion & time-stretching support
           if (media && media instanceof HTMLVideoElement && media.duration > 0) {
             const trimStart = Math.max(0, item.trimStartSec ?? 0);
             const trimEnd = (item.trimEndSec && item.trimEndSec > trimStart) ? Math.min(media.duration, item.trimEndSec) : media.duration;
             const clipSpan = Math.max(0.1, trimEnd - trimStart);
+            const direction = item.playbackDirection || 'forward';
 
             let effectiveSpeed = item.playbackRate ?? (style.enableVideoSlowMotion ? (style.videoPlaybackRate ?? 0.5) : 1.0);
             if (item.videoTimeStretchMode === 'auto-fit-duration' && item.durationSec > 0) {
@@ -148,21 +149,49 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
             media.playbackRate = effectiveSpeed;
 
             const timeSinceClipStart = loopedTime - accumulatedTime;
-            const expectedVideoTime = trimStart + ((timeSinceClipStart * effectiveSpeed) % clipSpan);
+            let expectedVideoTime = trimStart;
+
+            if (direction === 'freeze-frame') {
+              expectedVideoTime = item.freezeFrameTimeSec !== undefined ? item.freezeFrameTimeSec : trimStart;
+            } else if (direction === 'reverse') {
+              const progress = (timeSinceClipStart * effectiveSpeed) % clipSpan;
+              expectedVideoTime = trimEnd - progress;
+            } else if (direction === 'ping-pong') {
+              const cycle = (timeSinceClipStart * effectiveSpeed) % (clipSpan * 2);
+              if (cycle < clipSpan) {
+                expectedVideoTime = trimStart + cycle;
+              } else {
+                expectedVideoTime = trimEnd - (cycle - clipSpan);
+              }
+            } else {
+              // Standard forward
+              const progress = (timeSinceClipStart * effectiveSpeed) % clipSpan;
+              expectedVideoTime = trimStart + progress;
+            }
 
             if (isPlaying) {
-              if (media.paused) {
-                media.play().catch(() => {});
-              }
-              // Only seek if drift is noticeable (> 0.35s) e.g. timeline scrub or loop jump
-              if (Math.abs(media.currentTime - expectedVideoTime) > 0.35) {
-                media.currentTime = expectedVideoTime;
+              if (direction === 'forward') {
+                if (media.paused) {
+                  media.play().catch(() => {});
+                }
+                // Only seek if drift is noticeable (> 0.35s) e.g. timeline scrub or loop jump
+                if (Math.abs(media.currentTime - expectedVideoTime) > 0.35) {
+                  media.currentTime = expectedVideoTime;
+                }
+              } else {
+                // Reverse, Ping-Pong (backward phase), or Freeze Frame require continuous seek frames
+                if (!media.paused) {
+                  media.pause();
+                }
+                if (Math.abs(media.currentTime - expectedVideoTime) > 0.04) {
+                  media.currentTime = expectedVideoTime;
+                }
               }
             } else {
               if (!media.paused) {
                 media.pause();
               }
-              if (Math.abs(media.currentTime - expectedVideoTime) > 0.05) {
+              if (Math.abs(media.currentTime - expectedVideoTime) > 0.04) {
                 media.currentTime = expectedVideoTime;
               }
             }
@@ -185,9 +214,20 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
               const nextTrimEnd = (nextItem.trimEndSec && nextItem.trimEndSec > nextTrimStart) ? Math.min(nextMedia.duration, nextItem.trimEndSec) : nextMedia.duration;
               const nextClipSpan = Math.max(0.1, nextTrimEnd - nextTrimStart);
               const nextSpeed = nextItem.playbackRate ?? 1.0;
+              const nextDir = nextItem.playbackDirection || 'forward';
               nextMedia.playbackRate = nextSpeed;
-              const nextMediaLoopedTime = nextTrimStart + ((transitionProgress * nextSpeed) % nextClipSpan);
-              if (Math.abs(nextMedia.currentTime - nextMediaLoopedTime) > 0.3) {
+              
+              let nextMediaLoopedTime = nextTrimStart;
+              if (nextDir === 'freeze-frame') {
+                nextMediaLoopedTime = nextItem.freezeFrameTimeSec !== undefined ? nextItem.freezeFrameTimeSec : nextTrimStart;
+              } else if (nextDir === 'reverse') {
+                const p = (transitionProgress * nextSpeed) % nextClipSpan;
+                nextMediaLoopedTime = nextTrimEnd - p;
+              } else {
+                nextMediaLoopedTime = nextTrimStart + ((transitionProgress * nextSpeed) % nextClipSpan);
+              }
+
+              if (Math.abs(nextMedia.currentTime - nextMediaLoopedTime) > 0.1) {
                 nextMedia.currentTime = nextMediaLoopedTime;
               }
             }

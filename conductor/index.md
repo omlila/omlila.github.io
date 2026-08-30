@@ -11,5 +11,5 @@ Welcome to the Conductor documentation for **Omlila Gen**.
 ## Active Tracks
 - [x] [Standalone Video Studio & Monorepo Deployment](./tracks/standalone_ghpages_deployment_20260829/)
 - [x] [Omlila App Automation Protocol & MCP Server](./tracks/app_automation_bridge_20260829/)
-- [ ] [Video Subsections & Playback Directions (Forward, Reverse, Ping-Pong, Freeze)](./tracks/video_sequencing_subsections_20260830/)
+- [x] [Video Subsections & Playback Directions (Forward, Reverse, Ping-Pong, Freeze)](./tracks/video_sequencing_subsections_20260830/)
 

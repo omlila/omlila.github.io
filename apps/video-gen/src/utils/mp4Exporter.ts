@@ -401,11 +401,12 @@ export async function exportLyricalVideoMP4(
       }
     }
 
-    // Precise frame-accurate video seeking for slow-motion, trimming & time-stretching
+    // Precise frame-accurate video seeking for directions, slow-motion, trimming & time-stretching
     if (activeFrameBg instanceof HTMLVideoElement && activeFrameBg.duration > 0) {
       const trimStart = Math.max(0, activeItemObj?.trimStartSec ?? 0);
       const trimEnd = (activeItemObj?.trimEndSec && activeItemObj.trimEndSec > trimStart) ? Math.min(activeFrameBg.duration, activeItemObj.trimEndSec) : activeFrameBg.duration;
       const clipSpan = Math.max(0.1, trimEnd - trimStart);
+      const direction = activeItemObj?.playbackDirection || 'forward';
 
       let speed = activeItemObj?.playbackRate ?? (style.enableVideoSlowMotion ? (style.videoPlaybackRate ?? 0.5) : 1.0);
       if (activeItemObj?.videoTimeStretchMode === 'auto-fit-duration' && activeItemObj?.durationSec > 0) {
@@ -416,7 +417,25 @@ export async function exportLyricalVideoMP4(
       const totalSeqDuration = mediaItems && mediaItems.length > 0 ? mediaItems.reduce((acc, item) => acc + item.durationSec, 0) : 0;
       const loopedTime = totalSeqDuration > 0 ? timeSec % totalSeqDuration : timeSec;
       const timeSinceClipStart = loopedTime - activeItemAccTime;
-      const targetTime = trimStart + ((timeSinceClipStart * speed) % clipSpan);
+      
+      let targetTime = trimStart;
+      if (direction === 'freeze-frame') {
+        targetTime = activeItemObj?.freezeFrameTimeSec !== undefined ? activeItemObj.freezeFrameTimeSec : trimStart;
+      } else if (direction === 'reverse') {
+        const progress = (timeSinceClipStart * speed) % clipSpan;
+        targetTime = trimEnd - progress;
+      } else if (direction === 'ping-pong') {
+        const cycle = (timeSinceClipStart * speed) % (clipSpan * 2);
+        if (cycle < clipSpan) {
+          targetTime = trimStart + cycle;
+        } else {
+          targetTime = trimEnd - (cycle - clipSpan);
+        }
+      } else {
+        const progress = (timeSinceClipStart * speed) % clipSpan;
+        targetTime = trimStart + progress;
+      }
+
       await seekVideoToTime(activeFrameBg, targetTime);
     }
 
@@ -425,7 +444,18 @@ export async function exportLyricalVideoMP4(
       const nextTrimEnd = (nextItemObj?.trimEndSec && nextItemObj.trimEndSec > nextTrimStart) ? Math.min(nextFrameBg.duration, nextItemObj.trimEndSec) : nextFrameBg.duration;
       const nextClipSpan = Math.max(0.1, nextTrimEnd - nextTrimStart);
       const nextSpeed = nextItemObj?.playbackRate ?? 1.0;
-      const nextTargetTime = nextTrimStart + ((transitionProgress * nextSpeed) % nextClipSpan);
+      const nextDir = nextItemObj?.playbackDirection || 'forward';
+      
+      let nextTargetTime = nextTrimStart;
+      if (nextDir === 'freeze-frame') {
+        nextTargetTime = nextItemObj?.freezeFrameTimeSec !== undefined ? nextItemObj.freezeFrameTimeSec : nextTrimStart;
+      } else if (nextDir === 'reverse') {
+        const p = (transitionProgress * nextSpeed) % nextClipSpan;
+        nextTargetTime = nextTrimEnd - p;
+      } else {
+        nextTargetTime = nextTrimStart + ((transitionProgress * nextSpeed) % nextClipSpan);
+      }
+
       await seekVideoToTime(nextFrameBg, nextTargetTime);
     }
 

@@ -148,6 +148,9 @@ export interface MediaSequenceItem {
   trimStartSec?: number; // In-point start timestamp within source video file (seconds)
   trimEndSec?: number; // Out-point end timestamp within source video file (seconds)
   sourceDurationSec?: number; // Full duration of original video file
+  playbackDirection?: 'forward' | 'reverse' | 'ping-pong' | 'freeze-frame'; // Video direction & effect
+  freezeFrameTimeSec?: number; // Specific timestamp to hold still if in freeze-frame mode
+  sourceVideoId?: string; // Grouping identifier for subsections of the same video
 }
 
 export interface StyleConfig {

@@ -1,9 +1,9 @@
-import React, { useState, useRef } from 'react';
-import type { MediaSequenceItem, StyleConfig, BackgroundTransformConfig } from '../types';
+import React from 'react';
+import type { MediaSequenceItem, StyleConfig } from '../types';
 import { 
-  Upload, Trash2, ArrowLeft, ArrowRight, Image as ImageIcon, 
-  Clock, Sparkles, Wand2, Layers, Gauge, Scissors, Crop, 
-  Play, Pause, RotateCcw, ZoomIn, Move, Check, X, Film 
+  Upload, Trash2, ArrowUp, ArrowDown, 
+  Clock, Sparkles, Wand2, Layers, Scissors, 
+  Film, Copy
 } from 'lucide-react';
 import { saveMediaFile, deleteMediaFile } from '../utils/mediaStore';
 
@@ -24,18 +24,13 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
   onStyleChange,
   currentTime = 0,
 }) => {
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [previewVideoTime, setPreviewVideoTime] = useState<number>(0);
-  const [isVideoPlaying, setIsVideoPlaying] = useState<boolean>(false);
-  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
-
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
     const totalItemsCount = mediaItems.length + files.length;
     const equalDuration = audioDuration > 0 
-      ? Number((audioDuration / totalItemsCount).toFixed(2)) 
+      ? Number((audioDuration / totalItemsCount).toFixed(1)) 
       : 5.0;
 
     const newItems: MediaSequenceItem[] = [];
@@ -54,6 +49,10 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
         type: isVideo ? 'video' : 'image',
         url,
         durationSec: equalDuration,
+        trimStartSec: 0,
+        playbackRate: 0.5,
+        videoTimeStretchMode: 'slow-motion',
+        playbackDirection: 'forward',
       });
     }
 
@@ -71,22 +70,19 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
     await deleteMediaFile(id);
   };
 
-  const moveItem = (index: number, direction: 'left' | 'right') => {
-    const newIdx = direction === 'left' ? index - 1 : index + 1;
+  const moveItem = (index: number, direction: 'up' | 'down') => {
+    const newIdx = direction === 'up' ? index - 1 : index + 1;
     if (newIdx < 0 || newIdx >= mediaItems.length) return;
 
     const updated = [...mediaItems];
     const [moved] = updated.splice(index, 1);
     updated.splice(newIdx, 0, moved);
     onUpdateMediaItems(updated);
-    if (editingIndex === index) {
-      setEditingIndex(newIdx);
-    }
   };
 
   const updateDuration = (id: string, durationSec: number) => {
     onUpdateMediaItems(
-      mediaItems.map((item) => (item.id === id ? { ...item, durationSec: Math.max(1, durationSec) } : item))
+      mediaItems.map((item) => (item.id === id ? { ...item, durationSec: Math.max(0.5, Number(durationSec.toFixed(1))) } : item))
     );
   };
 
@@ -100,97 +96,81 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
     onUpdateMediaItems(updated);
   };
 
-  const updateItemTransform = (
-    index: number,
-    transformPartial: Partial<BackgroundTransformConfig>
-  ) => {
-    const current = mediaItems[index]?.transform || {
-      scale: 1.0,
-      offsetXPercent: 0,
-      offsetYPercent: 0,
-      fitMode: 'cover'
-    };
-    updateItemField(index, 'transform', { ...current, ...transformPartial });
-  };
-
-  const duplicateItem = (index: number) => {
-    const itemToDuplicate = mediaItems[index];
-    const duplicatedItem: MediaSequenceItem = {
-      ...itemToDuplicate,
-      id: `media_${Date.now()}_dup`,
-      name: `${itemToDuplicate.name} (Copy)`
-    };
+  // 1-Click "End Here & Add Next Scene": Locks current clip's duration to song playback time and appends next video subsection
+  const handleEndHereAndSplit = (index: number) => {
+    if (!currentTime || currentTime <= 0) return;
     
+    let accumulatedBefore = 0;
+    for (let i = 0; i < index; i++) {
+      accumulatedBefore += mediaItems[i].durationSec;
+    }
+    
+    let currentClipDuration = Number((currentTime - accumulatedBefore).toFixed(1));
+    if (currentClipDuration < 0.5) currentClipDuration = 0.5;
+
+    const currentItem = mediaItems[index];
     const updated = [...mediaItems];
-    updated.splice(index + 1, 0, duplicatedItem);
-    onUpdateMediaItems(updated);
-  };
 
-  // Split video at current preview timestamp into two sequential clips
-  const splitVideoSegment = (index: number) => {
-    const item = mediaItems[index];
-    if (item.type !== 'video') return;
+    // Lock duration of current scene to end at current playback position
+    updated[index] = { ...currentItem, durationSec: currentClipDuration };
 
-    const splitTimestamp = previewVideoTime;
-    const originalTrimStart = item.trimStartSec ?? 0;
-    const originalTrimEnd = item.trimEndSec ?? (item.sourceDurationSec || 60);
+    // If it's a video, automatically spawn the next contiguous scene from the same video
+    if (currentItem.type === 'video') {
+      const speed = currentItem.playbackRate ?? 0.5;
+      const currentTrimStart = currentItem.trimStartSec ?? 0;
+      const nextTrimStart = Number((currentTrimStart + (currentClipDuration * speed)).toFixed(1));
+      
+      const remainingAudio = audioDuration > currentTime ? Number((audioDuration - currentTime).toFixed(1)) : 5.0;
 
-    if (splitTimestamp <= originalTrimStart || splitTimestamp >= originalTrimEnd) {
-      alert('Move the scrubber to a point between the start and end to split the clip.');
-      return;
+      const nextScene: MediaSequenceItem = {
+        ...currentItem,
+        id: `media_${Date.now()}_scene`,
+        name: `${currentItem.name.replace(/ \(Scene \d+\)/, '')} (Scene ${index + 2})`,
+        trimStartSec: nextTrimStart,
+        durationSec: Math.max(1, remainingAudio),
+        playbackDirection: currentItem.playbackDirection || 'forward',
+      };
+
+      updated.splice(index + 1, 0, nextScene);
     }
 
-    const firstDuration = Math.max(1, Number((item.durationSec / 2).toFixed(1)));
-    const secondDuration = Math.max(1, Number((item.durationSec / 2).toFixed(1)));
+    onUpdateMediaItems(updated);
+  };
 
-    // First clip ends at split timestamp
-    const firstClip: MediaSequenceItem = {
-      ...item,
-      trimEndSec: splitTimestamp,
-      durationSec: firstDuration,
-      name: `${item.name} (Part 1)`
+  // Add another scene subsection from the same video
+  const expandVideoScene = (index: number, direction: 'forward' | 'reverse' | 'ping-pong' | 'freeze-frame' = 'forward') => {
+    const item = mediaItems[index];
+    const speed = item.playbackRate ?? 0.5;
+    const currentTrimStart = item.trimStartSec ?? 0;
+    const nextTrimStart = direction === 'forward' ? Number((currentTrimStart + (item.durationSec * speed)).toFixed(1)) : currentTrimStart;
+
+    const labelMap: Record<string, string> = {
+      'forward': 'Next Scene',
+      'reverse': 'Reverse',
+      'ping-pong': 'Boomerang',
+      'freeze-frame': 'Freeze'
     };
 
-    // Second clip starts at split timestamp and continues to original end
-    const secondClip: MediaSequenceItem = {
+    const nextScene: MediaSequenceItem = {
       ...item,
-      id: `media_${Date.now()}_part2`,
-      trimStartSec: splitTimestamp,
-      trimEndSec: originalTrimEnd,
-      durationSec: secondDuration,
-      name: `${item.name} (Part 2)`
+      id: `media_${Date.now()}_scene`,
+      name: `${item.name.replace(/ \((Next Scene|Reverse|Boomerang|Freeze|Scene \d+)\)/, '')} (${labelMap[direction]})`,
+      trimStartSec: nextTrimStart,
+      playbackDirection: direction,
+      durationSec: item.durationSec || 5.0,
     };
 
     const updated = [...mediaItems];
-    updated.splice(index, 1, firstClip, secondClip);
+    updated.splice(index + 1, 0, nextScene);
     onUpdateMediaItems(updated);
-    setEditingIndex(index + 1);
   };
 
   const autoDistributeDurations = () => {
     if (mediaItems.length === 0 || audioDuration <= 0) return;
-    const equalDuration = Number((audioDuration / mediaItems.length).toFixed(2));
+    const equalDuration = Number((audioDuration / mediaItems.length).toFixed(1));
     onUpdateMediaItems(mediaItems.map((item) => ({ ...item, durationSec: equalDuration })));
   };
 
-  const handleSetEndTime = (index: number) => {
-    if (!currentTime) return;
-    let startTime = 0;
-    for (let i = 0; i < index; i++) {
-      startTime += mediaItems[i].durationSec;
-    }
-    let newDuration = currentTime - startTime;
-    if (newDuration < 0.1) newDuration = 0.1;
-    updateDuration(mediaItems[index].id, Number(newDuration.toFixed(2)));
-  };
-
-  const formatSec = (sec: number) => {
-    const m = Math.floor(sec / 60).toString().padStart(2, '0');
-    const s = (sec % 60).toFixed(1).padStart(4, '0');
-    return `${m}:${s}`;
-  };
-
-  const activeEditingItem = editingIndex !== null ? mediaItems[editingIndex] : null;
   const totalMediaDuration = mediaItems.reduce((acc, item) => acc + item.durationSec, 0);
 
   return (
@@ -199,8 +179,8 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
       <div className="md-surface-container p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm font-bold text-[var(--md-sys-color-primary)]">
-            <ImageIcon className="w-5 h-5 text-[var(--md-sys-color-primary)]" aria-hidden="true" />
-            <span>Multi-Media Background Sequencer</span>
+            <Film className="w-5 h-5 text-[var(--md-sys-color-primary)]" aria-hidden="true" />
+            <span>Video Scenes & Background Sequencer</span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -209,16 +189,16 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
               onClick={autoDistributeDurations}
               disabled={mediaItems.length === 0 || audioDuration <= 0}
               aria-label="Auto-fit image durations to match audio length"
-              title={audioDuration <= 0 ? "Load audio first to use auto-fit" : "Auto-fit image durations to match audio length"}
-              className="md-button-outlined !px-3 !py-1.5 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={audioDuration <= 0 ? "Load audio first to use auto-fit" : "Auto-fit clip durations to match audio length"}
+              className="md-button-outlined !px-3 !py-1.5 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold"
             >
               <Wand2 className="w-4 h-4" aria-hidden="true" />
-              <span>Auto-Fit Timings</span>
+              <span>Equal Fit ({audioDuration > 0 ? `${audioDuration.toFixed(0)}s` : 'Full Track'})</span>
             </button>
 
-            <label className="md-button-filled cursor-pointer flex items-center gap-2">
+            <label className="md-button-filled cursor-pointer flex items-center gap-2 text-xs font-bold !py-1.5 !px-3">
               <Upload className="w-4 h-4" aria-hidden="true" />
-              <span>Add Media Clips</span>
+              <span>Add Videos / Images</span>
               <input
                 type="file"
                 multiple
@@ -231,7 +211,7 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
         </div>
 
         <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
-          Upload photos or video clips and arrange their order. Clips will automatically transition in sequence during video rendering.
+          Upload video backgrounds or photos. Click <strong>"End Here ✂️"</strong> during audio playback to lock scene boundaries, or use <strong>"⏩ Forward"</strong>, <strong>"⏪ Reverse"</strong>, and <strong>"🪃 Boomerang"</strong> to create looping visuals.
         </p>
 
         {style && onStyleChange && (
@@ -256,457 +236,221 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
         )}
 
         <div className="flex justify-between text-[11px] font-mono text-[var(--md-sys-color-on-surface-variant)] border-t border-[var(--md-sys-color-outline-variant)] pt-3 tabular-nums mt-3">
-          <span>Clips Count: {mediaItems.length}</span>
-          <span>Sequence Duration: {totalMediaDuration.toFixed(1)}s / Audio: {audioDuration.toFixed(1)}s</span>
+          <span>Scenes: {mediaItems.length}</span>
+          <span>Timeline: {totalMediaDuration.toFixed(1)}s / Audio: {audioDuration.toFixed(1)}s</span>
         </div>
       </div>
 
-      {/* Media Items Sequence Grid */}
+      {/* Media Items Sequence List */}
       {mediaItems.length === 0 ? (
         <div className="md-surface-container-highest p-8 border border-dashed border-[var(--md-sys-color-outline-variant)] text-center space-y-3">
           <Sparkles className="w-8 h-8 text-[var(--md-sys-color-primary)] mx-auto animate-pulse" aria-hidden="true" />
-          <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">No Background Clips Uploaded</h3>
+          <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">No Video Scenes Uploaded</h3>
           <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] max-w-xs mx-auto">
-            Upload photos or video backgrounds to build a dynamic slideshow sequence for your lyrical video.
+            Upload videos or images to build your lyrical sequence. You can expand any video into forward, reverse, and boomerang scenes.
           </p>
         </div>
       ) : (
-        <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+        <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
           {mediaItems.map((item, index) => {
-            const hasCustomCrop = (item.transform?.scale && item.transform.scale !== 1.0) || item.transform?.offsetXPercent || item.transform?.offsetYPercent;
-            const hasTrim = (item.trimStartSec && item.trimStartSec > 0) || (item.trimEndSec !== undefined);
+            const dir = item.playbackDirection || 'forward';
 
             return (
               <div
                 key={item.id}
-                className={`md-surface-container p-3 flex items-center justify-between gap-3 group border transition-all ${
-                  editingIndex === index 
-                    ? 'border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]/10' 
-                    : 'border-transparent hover:border-[var(--md-sys-color-outline-variant)]'
-                }`}
+                className="md-surface-container p-3.5 rounded-xl border border-[var(--md-sys-color-outline-variant)] hover:border-[var(--md-sys-color-primary)] transition-all space-y-3 group"
               >
-                {/* Left Info & Thumbnail */}
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-sm font-mono font-bold text-[var(--md-sys-color-primary)] w-5 tabular-nums">
-                    #{index + 1}
-                  </span>
-
-                  <div className="w-14 h-14 rounded-lg bg-[var(--md-sys-color-surface-container-highest)] overflow-hidden shrink-0 flex items-center justify-center relative">
-                    {item.type === 'image' ? (
-                      <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <video src={`${item.url}#t=${item.trimStartSec || 0.5}`} className="w-full h-full object-cover" muted playsInline preload="metadata" />
-                    )}
-                    <span className="absolute bottom-1 right-1 px-1 rounded-sm bg-black/80 text-[10px] font-mono text-white">
-                      {item.type}
+                {/* Top Row: Info, Badges & Reorder Actions */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-xs font-mono font-bold text-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-surface-container-highest)] px-2 py-0.5 rounded-md tabular-nums">
+                      Scene #{index + 1}
                     </span>
-                  </div>
 
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)] truncate block max-w-[160px]">
+                    <div className="w-12 h-12 rounded-lg bg-[var(--md-sys-color-surface-container-highest)] overflow-hidden shrink-0 flex items-center justify-center relative border border-white/5">
+                      {item.type === 'image' ? (
+                        <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <video src={`${item.url}#t=${item.trimStartSec || 0.5}`} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+                      )}
+                      <span className="absolute bottom-0.5 right-0.5 px-1 rounded-sm bg-black/80 text-[9px] font-mono text-white">
+                        {item.type}
+                      </span>
+                    </div>
+
+                    <div className="min-w-0">
+                      <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)] truncate block max-w-[200px]" title={item.name}>
                         {item.name}
                       </span>
-                      {hasTrim && (
-                        <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-mono font-bold">
-                          ✂️ {item.trimStartSec ? `${item.trimStartSec.toFixed(1)}s` : '0s'}-{item.trimEndSec ? `${item.trimEndSec.toFixed(1)}s` : 'End'}
-                        </span>
-                      )}
-                      {hasCustomCrop && (
-                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold">
-                          🔍 {item.transform?.scale?.toFixed(1)}x
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-[var(--md-sys-color-on-surface-variant)]" aria-hidden="true" />
-                        <label htmlFor={`duration-${item.id}`} className="sr-only">Duration in seconds for {item.name}</label>
-                        <input
-                          id={`duration-${item.id}`}
-                          type="number"
-                          min={1}
-                          max={120}
-                          step={0.5}
-                          value={item.durationSec}
-                          onChange={(e) => updateDuration(item.id, Number(e.target.value))}
-                          className="w-14 bg-[var(--md-sys-color-surface-container-highest)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-1 py-0.5 text-xs font-mono text-center rounded tabular-nums"
-                        />
-                        <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] font-medium">sec</span>
-                        <button
-                          type="button"
-                          onClick={() => handleSetEndTime(index)}
-                          title="End Clip Here (adjusts this clip's duration)"
-                          className="md-button-tonal !px-1.5 !py-0.5 text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-primary-container)] rounded text-[10px] font-bold"
-                        >
-                          End Here
-                        </button>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {item.type === 'video' && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${
+                            dir === 'reverse' ? 'bg-amber-500/20 text-amber-300' :
+                            dir === 'ping-pong' ? 'bg-purple-500/20 text-purple-300' :
+                            dir === 'freeze-frame' ? 'bg-cyan-500/20 text-cyan-300' :
+                            'bg-emerald-500/20 text-emerald-300'
+                          }`}>
+                            {dir === 'reverse' ? '⏪ Reverse' : dir === 'ping-pong' ? '🪃 Boomerang' : dir === 'freeze-frame' ? '⏸️ Freeze' : '⏩ Forward'}
+                          </span>
+                        )}
+                        {item.trimStartSec && item.trimStartSec > 0 ? (
+                          <span className="text-[10px] text-zinc-400 font-mono">
+                            Start: {item.trimStartSec.toFixed(1)}s
+                          </span>
+                        ) : null}
                       </div>
-
-                      {item.type === 'video' && (
-                        <div className="flex items-center gap-1">
-                          <Gauge className="w-3.5 h-3.5 text-[var(--md-sys-color-primary)]" aria-hidden="true" />
-                          <select
-                            id={`speed-${item.id}`}
-                            value={item.videoTimeStretchMode === 'auto-fit-duration' ? 'auto-fit-duration' : (item.playbackRate ?? 0.5)}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (val === 'auto-fit-duration') {
-                                updateItemField(index, 'videoTimeStretchMode', 'auto-fit-duration');
-                              } else {
-                                const rate = Number(val);
-                                const updated = [...mediaItems];
-                                updated[index] = { ...updated[index], playbackRate: rate, videoTimeStretchMode: 'slow-motion' };
-                                onUpdateMediaItems(updated);
-                              }
-                            }}
-                            className="bg-[var(--md-sys-color-surface-container-highest)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-1 py-0.5 text-[11px] font-mono rounded cursor-pointer"
-                          >
-                            <option value="0.25">0.25x Super Slow</option>
-                            <option value="0.5">0.5x Slow-Mo</option>
-                            <option value="0.75">0.75x Smooth</option>
-                            <option value="1">1.0x Normal</option>
-                            <option value="auto-fit-duration">Auto-Stretch</option>
-                          </select>
-                        </div>
-                      )}
-
-                      {/* Crop & Trim Button */}
-                      <button
-                        type="button"
-                        onClick={() => setEditingIndex(editingIndex === index ? null : index)}
-                        className={`!py-0.5 !px-2 rounded text-[11px] font-bold flex items-center gap-1 border transition-colors ${
-                          editingIndex === index
-                            ? 'bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] border-transparent'
-                            : 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] border-[var(--md-sys-color-outline-variant)] hover:border-[var(--md-sys-color-primary)]'
-                        }`}
-                      >
-                        <Crop className="w-3 h-3" aria-hidden="true" />
-                        <span>{item.type === 'video' ? 'Trim & Crop' : 'Crop & Frame'}</span>
-                      </button>
                     </div>
+                  </div>
+
+                  {/* Reorder and Delete */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => moveItem(index, 'up')}
+                      disabled={index === 0}
+                      aria-label="Move scene earlier"
+                      title="Move Scene Earlier"
+                      className="md-button-tonal !p-1.5 disabled:opacity-30 rounded-lg"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => moveItem(index, 'down')}
+                      disabled={index === mediaItems.length - 1}
+                      aria-label="Move scene later"
+                      title="Move Scene Later"
+                      className="md-button-tonal !p-1.5 disabled:opacity-30 rounded-lg"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => removeItem(item.id)}
+                      aria-label="Delete scene"
+                      title="Delete Scene"
+                      className="md-button-tonal !p-1.5 text-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-error-container)] rounded-lg"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
 
-                {/* Right Action Buttons */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => duplicateItem(index)}
-                    aria-label={`Duplicate ${item.name}`}
-                    title="Duplicate Clip"
-                    className="md-button-tonal !p-1.5"
-                  >
-                    <Layers className="w-3.5 h-3.5" aria-hidden="true" />
-                  </button>
-                  
-                  <button
-                    type="button"
-                    onClick={() => moveItem(index, 'left')}
-                    disabled={index === 0}
-                    aria-label={`Move ${item.name} up in sequence`}
-                    title="Move Earlier in Sequence"
-                    className="md-button-tonal !p-1.5 disabled:opacity-30"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
-                  </button>
+                {/* Bottom Row: Controls & Quick Actions */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-[var(--md-sys-color-outline-variant)]/40 text-xs">
+                  {/* Left Controls: Duration & "End Here" */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 bg-[var(--md-sys-color-surface-container-highest)] px-2 py-1 rounded-lg border border-[var(--md-sys-color-outline-variant)]">
+                      <Clock className="w-3.5 h-3.5 text-[var(--md-sys-color-primary)]" />
+                      <label htmlFor={`duration-${item.id}`} className="sr-only">Duration</label>
+                      <input
+                        id={`duration-${item.id}`}
+                        type="number"
+                        min={0.5}
+                        max={120}
+                        step={0.5}
+                        value={item.durationSec}
+                        onChange={(e) => updateDuration(item.id, Number(e.target.value))}
+                        className="w-14 bg-transparent text-[var(--md-sys-color-on-surface)] text-xs font-mono text-center font-bold focus:outline-none"
+                      />
+                      <span className="text-[10px] text-zinc-400 font-medium">sec</span>
+                    </div>
 
-                  <button
-                    type="button"
-                    onClick={() => moveItem(index, 'right')}
-                    disabled={index === mediaItems.length - 1}
-                    aria-label={`Move ${item.name} down in sequence`}
-                    title="Move Later in Sequence"
-                    className="md-button-tonal !p-1.5 disabled:opacity-30"
-                  >
-                    <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleEndHereAndSplit(index)}
+                      title="Set clip end time to current audio playback position and automatically add the next scene"
+                      className="md-button-filled !py-1 !px-2.5 text-xs font-bold flex items-center gap-1 bg-amber-600 hover:bg-amber-500 text-white shadow-sm"
+                    >
+                      <Scissors className="w-3.5 h-3.5" />
+                      <span>End Here ✂️</span>
+                    </button>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => removeItem(item.id)}
-                    aria-label={`Delete ${item.name} from sequence`}
-                    title="Delete Clip"
-                    className="md-button-tonal !p-1.5 text-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-error-container)]"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                  </button>
+                  {/* Right Controls (Video direction & expand actions) */}
+                  {item.type === 'video' ? (
+                    <div className="flex items-center gap-1.5 justify-start sm:justify-end flex-wrap">
+                      {/* Direction Dropdown */}
+                      <select
+                        value={item.playbackDirection || 'forward'}
+                        onChange={(e) => updateItemField(index, 'playbackDirection', e.target.value as any)}
+                        className="bg-[var(--md-sys-color-surface-container-highest)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-2 py-1 text-xs font-bold rounded-lg cursor-pointer focus:outline-none"
+                      >
+                        <option value="forward">⏩ Forward</option>
+                        <option value="reverse">⏪ Reverse</option>
+                        <option value="ping-pong">🪃 Boomerang Loop</option>
+                        <option value="freeze-frame">⏸️ Freeze Still</option>
+                      </select>
+
+                      {/* Speed Multiplier */}
+                      <select
+                        value={item.videoTimeStretchMode === 'auto-fit-duration' ? 'auto-fit-duration' : (item.playbackRate ?? 0.5)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === 'auto-fit-duration') {
+                            updateItemField(index, 'videoTimeStretchMode', 'auto-fit-duration');
+                          } else {
+                            const updated = [...mediaItems];
+                            updated[index] = { ...updated[index], playbackRate: Number(val), videoTimeStretchMode: 'slow-motion' };
+                            onUpdateMediaItems(updated);
+                          }
+                        }}
+                        className="bg-[var(--md-sys-color-surface-container-highest)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-1.5 py-1 text-xs font-mono rounded-lg cursor-pointer focus:outline-none"
+                      >
+                        <option value="0.25">0.25x Slow</option>
+                        <option value="0.5">0.5x Smooth</option>
+                        <option value="0.75">0.75x</option>
+                        <option value="1">1.0x Normal</option>
+                        <option value="auto-fit-duration">Auto-Fit</option>
+                      </select>
+
+                      {/* Quick Expand Button */}
+                      <button
+                        type="button"
+                        onClick={() => expandVideoScene(index, 'forward')}
+                        title="Add next scene from this video"
+                        className="md-button-tonal !py-1 !px-2 text-xs font-bold flex items-center gap-1 rounded-lg text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-primary-container)]"
+                      >
+                        <span>+ Add Scene</span>
+                      </button>
+
+                      {/* Quick Boomerang Button */}
+                      <button
+                        type="button"
+                        onClick={() => expandVideoScene(index, 'reverse')}
+                        title="Duplicate as a Reverse scene"
+                        className="md-button-tonal !py-1 !px-2 text-xs font-bold flex items-center gap-1 rounded-lg text-purple-300 hover:bg-purple-900/30"
+                      >
+                        <span>⏪ Reverse Clone</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-start sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const duplicated: MediaSequenceItem = {
+                            ...item,
+                            id: `media_${Date.now()}_dup`,
+                            name: `${item.name} (Copy)`
+                          };
+                          const updated = [...mediaItems];
+                          updated.splice(index + 1, 0, duplicated);
+                          onUpdateMediaItems(updated);
+                        }}
+                        className="md-button-tonal !py-1 !px-2.5 text-xs font-bold flex items-center gap-1 rounded-lg"
+                      >
+                        <Copy className="w-3 h-3" />
+                        <span>Duplicate Photo</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* Interactive Video Trimming, Cropping & Framing Editor Drawer */}
-      {activeEditingItem && editingIndex !== null && (
-        <div className="md-surface-container p-5 border-2 border-[var(--md-sys-color-primary)] rounded-2xl space-y-4 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="flex items-center justify-between border-b border-[var(--md-sys-color-outline-variant)] pb-3">
-            <div className="flex items-center gap-2">
-              <Film className="w-5 h-5 text-[var(--md-sys-color-primary)]" />
-              <div>
-                <h4 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">
-                  {activeEditingItem.type === 'video' ? 'Video Trim & Framing Editor' : 'Image Crop & Pan Editor'}
-                </h4>
-                <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                  Editing Clip #{editingIndex + 1}: {activeEditingItem.name}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setEditingIndex(null)}
-              className="md-button-tonal !p-1.5 text-zinc-400 hover:text-white"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Video Section Trimming Controls (if video) */}
-          {activeEditingItem.type === 'video' && (
-            <div className="bg-black/40 p-4 rounded-xl space-y-3 border border-white/5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-[var(--md-sys-color-primary)] flex items-center gap-1.5">
-                  <Scissors className="w-3.5 h-3.5" /> Video Section Range (In/Out Points)
-                </span>
-                <span className="font-mono text-zinc-400">
-                  Scrubber: <strong className="text-white">{formatSec(previewVideoTime)}</strong> / {activeEditingItem.sourceDurationSec ? formatSec(activeEditingItem.sourceDurationSec) : '--:--'}
-                </span>
-              </div>
-
-              {/* Video Player Preview for Trimming */}
-              <div className="relative aspect-video max-h-[180px] bg-black rounded-lg overflow-hidden flex items-center justify-center mx-auto border border-white/10">
-                <video
-                  ref={videoPreviewRef}
-                  src={activeEditingItem.url}
-                  className="w-full h-full object-contain"
-                  playsInline
-                  muted
-                  onLoadedMetadata={(e) => {
-                    const dur = e.currentTarget.duration;
-                    if (dur && isFinite(dur)) {
-                      updateItemField(editingIndex, 'sourceDurationSec', dur);
-                      if (activeEditingItem.trimEndSec === undefined) {
-                        updateItemField(editingIndex, 'trimEndSec', dur);
-                      }
-                    }
-                  }}
-                  onTimeUpdate={(e) => setPreviewVideoTime(e.currentTarget.currentTime)}
-                />
-                
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (videoPreviewRef.current) {
-                      if (isVideoPlaying) {
-                        videoPreviewRef.current.pause();
-                        setIsVideoPlaying(false);
-                      } else {
-                        videoPreviewRef.current.play();
-                        setIsVideoPlaying(true);
-                      }
-                    }
-                  }}
-                  className="absolute bottom-2 left-2 p-2 rounded-full bg-black/70 hover:bg-black text-white shadow-lg backdrop-blur-md"
-                >
-                  {isVideoPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                </button>
-              </div>
-
-              {/* Range Timeline Scrubber Slider */}
-              <div className="space-y-1.5">
-                <input
-                  type="range"
-                  min={0}
-                  max={activeEditingItem.sourceDurationSec || 60}
-                  step={0.1}
-                  value={previewVideoTime}
-                  onChange={(e) => {
-                    const t = Number(e.target.value);
-                    setPreviewVideoTime(t);
-                    if (videoPreviewRef.current) {
-                      videoPreviewRef.current.currentTime = t;
-                    }
-                  }}
-                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[var(--md-sys-color-primary)]"
-                />
-                
-                {/* Visual Section Boundary Bar */}
-                <div className="flex justify-between items-center text-[10px] font-mono text-zinc-400">
-                  <span>00:00.0</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-amber-400">In: {formatSec(activeEditingItem.trimStartSec || 0)}</span>
-                    <span>•</span>
-                    <span className="text-amber-400">Out: {formatSec(activeEditingItem.trimEndSec || (activeEditingItem.sourceDurationSec || 0))}</span>
-                    <span>•</span>
-                    <span className="text-emerald-400 font-bold">Span: {((activeEditingItem.trimEndSec || activeEditingItem.sourceDurationSec || 0) - (activeEditingItem.trimStartSec || 0)).toFixed(1)}s</span>
-                  </div>
-                  <span>{formatSec(activeEditingItem.sourceDurationSec || 60)}</span>
-                </div>
-              </div>
-
-              {/* Set In/Out and Split Buttons */}
-              <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateItemField(editingIndex, 'trimStartSec', previewVideoTime);
-                    }}
-                    className="md-button-tonal !py-1 !px-2.5 text-xs font-bold text-amber-300 flex items-center gap-1"
-                    title="Set In-Point to current scrubber time"
-                  >
-                    <span>[ Set In-Point ({formatSec(previewVideoTime)})</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateItemField(editingIndex, 'trimEndSec', previewVideoTime);
-                    }}
-                    className="md-button-tonal !py-1 !px-2.5 text-xs font-bold text-amber-300 flex items-center gap-1"
-                    title="Set Out-Point to current scrubber time"
-                  >
-                    <span>Set Out-Point ({formatSec(previewVideoTime)}) ]</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateItemField(editingIndex, 'trimStartSec', 0);
-                      updateItemField(editingIndex, 'trimEndSec', activeEditingItem.sourceDurationSec || undefined);
-                    }}
-                    className="md-button-tonal !py-1 !px-2 text-xs text-zinc-400"
-                    title="Reset to full source video"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => splitVideoSegment(editingIndex)}
-                  className="md-button-filled !py-1 !px-3 text-xs bg-amber-600 hover:bg-amber-500 text-white flex items-center gap-1 font-bold shadow-md"
-                  title="Cut video here and add the remainder as the next clip in sequence"
-                >
-                  <Scissors className="w-3.5 h-3.5" />
-                  <span>✂️ Split Section Here</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Portion of the Frame (Cropping, Pan & Zoom) */}
-          <div className="bg-black/30 p-4 rounded-xl space-y-3 border border-white/5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-[var(--md-sys-color-primary)] flex items-center gap-1.5">
-                <Crop className="w-3.5 h-3.5" /> Frame Portion & Zoom (Cropping ROI)
-              </span>
-              <span className="text-[11px] text-zinc-400">
-                Fit: <strong className="text-white uppercase">{activeEditingItem.transform?.fitMode || 'cover'}</strong>
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Zoom Scale */}
-              <div className="space-y-1">
-                <div className="flex justify-between text-[11px] font-bold text-zinc-300">
-                  <span className="flex items-center gap-1"><ZoomIn className="w-3 h-3" /> Zoom Scale</span>
-                  <span className="font-mono text-emerald-400">{(activeEditingItem.transform?.scale || 1.0).toFixed(1)}x</span>
-                </div>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={3.0}
-                  step={0.05}
-                  value={activeEditingItem.transform?.scale || 1.0}
-                  onChange={(e) => updateItemTransform(editingIndex, { scale: Number(e.target.value) })}
-                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[var(--md-sys-color-primary)]"
-                />
-              </div>
-
-              {/* Pan X */}
-              <div className="space-y-1">
-                <div className="flex justify-between text-[11px] font-bold text-zinc-300">
-                  <span className="flex items-center gap-1"><Move className="w-3 h-3" /> Pan X (Horizontal)</span>
-                  <span className="font-mono text-emerald-400">{activeEditingItem.transform?.offsetXPercent || 0}%</span>
-                </div>
-                <input
-                  type="range"
-                  min={-50}
-                  max={50}
-                  step={1}
-                  value={activeEditingItem.transform?.offsetXPercent || 0}
-                  onChange={(e) => updateItemTransform(editingIndex, { offsetXPercent: Number(e.target.value) })}
-                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[var(--md-sys-color-primary)]"
-                />
-              </div>
-
-              {/* Pan Y */}
-              <div className="space-y-1">
-                <div className="flex justify-between text-[11px] font-bold text-zinc-300">
-                  <span className="flex items-center gap-1"><Move className="w-3 h-3 rotate-90" /> Pan Y (Vertical)</span>
-                  <span className="font-mono text-emerald-400">{activeEditingItem.transform?.offsetYPercent || 0}%</span>
-                </div>
-                <input
-                  type="range"
-                  min={-50}
-                  max={50}
-                  step={1}
-                  value={activeEditingItem.transform?.offsetYPercent || 0}
-                  onChange={(e) => updateItemTransform(editingIndex, { offsetYPercent: Number(e.target.value) })}
-                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[var(--md-sys-color-primary)]"
-                />
-              </div>
-            </div>
-
-            {/* Quick Fit Mode Buttons */}
-            <div className="flex items-center gap-2 pt-1">
-              <span className="text-[11px] text-zinc-400">Framing Mode:</span>
-              <button
-                type="button"
-                onClick={() => updateItemTransform(editingIndex, { fitMode: 'cover', scale: 1.0, offsetXPercent: 0, offsetYPercent: 0 })}
-                className={`py-0.5 px-2 rounded text-[11px] font-bold border ${
-                  activeEditingItem.transform?.fitMode === 'cover'
-                    ? 'bg-[var(--md-sys-color-primary-container)] border-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary-container)]'
-                    : 'bg-zinc-800 border-transparent text-zinc-300'
-                }`}
-              >
-                Cover (Fill Screen)
-              </button>
-              <button
-                type="button"
-                onClick={() => updateItemTransform(editingIndex, { fitMode: 'contain', scale: 1.0, offsetXPercent: 0, offsetYPercent: 0 })}
-                className={`py-0.5 px-2 rounded text-[11px] font-bold border ${
-                  activeEditingItem.transform?.fitMode === 'contain'
-                    ? 'bg-[var(--md-sys-color-primary-container)] border-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary-container)]'
-                    : 'bg-zinc-800 border-transparent text-zinc-300'
-                }`}
-              >
-                Contain (Full Frame)
-              </button>
-              <button
-                type="button"
-                onClick={() => updateItemTransform(editingIndex, { scale: 1.0, offsetXPercent: 0, offsetYPercent: 0 })}
-                className="py-0.5 px-2 rounded text-[11px] font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-400"
-              >
-                Reset Pan/Zoom
-              </button>
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-1">
-            <button
-              type="button"
-              onClick={() => setEditingIndex(null)}
-              className="md-button-filled !py-1.5 !px-4 text-xs flex items-center gap-1.5 font-bold"
-            >
-              <Check className="w-3.5 h-3.5" />
-              <span>Done Editing Clip #{editingIndex + 1}</span>
-            </button>
-          </div>
         </div>
       )}
     </div>
