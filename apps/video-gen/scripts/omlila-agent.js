@@ -84,6 +84,8 @@ export class OmlilaAppClient {
     await this.connect();
     const dataUrl = await this.page.evaluate((opts) => window.omlilaStudio.captureCanvasFrame(opts), options);
     if (options.outputPath) {
+      const dir = path.dirname(options.outputPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
       fs.writeFileSync(options.outputPath, Buffer.from(base64Data, 'base64'));
       console.log(`📸 Frame saved to ${options.outputPath}`);

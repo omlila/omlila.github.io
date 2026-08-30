@@ -71,9 +71,11 @@ export function renderLyricFrame(
       ctx.globalAlpha = globalAlpha;
     }
 
-    // Ken Burns (Zoom / Pan) Motion Effect
+    // Ken Burns (Zoom / Pan) Motion Effect: Starts full-screen with overscan to eliminate edge gaps
     if (style.enableKenBurns) {
-      const kbZoom = 1 + Math.sin(currentTime * 0.2) * 0.08;
+      const minOverscan = 1.15;
+      const zoomCycle = (1 + Math.sin(currentTime * 0.15)) * 0.5; // 0.0 to 1.0
+      const kbZoom = minOverscan + zoomCycle * 0.12; // 1.15 to 1.27
       scale *= kbZoom;
     }
 
@@ -84,8 +86,20 @@ export function renderLyricFrame(
     let offsetY = (height - drawHeight) / 2 + (height * ((transformToUse?.offsetYPercent ?? 0) / 100));
 
     if (style.enableKenBurns) {
-      offsetX += Math.cos(currentTime * 0.15) * (width * 0.02);
-      offsetY += Math.sin(currentTime * 0.15) * (height * 0.02);
+      const maxPanX = Math.max(0, (drawWidth - width) / 2);
+      const maxPanY = Math.max(0, (drawHeight - height) / 2);
+      const panX = Math.cos(currentTime * 0.08) * (maxPanX * 0.6);
+      const panY = Math.sin(currentTime * 0.06) * (maxPanY * 0.6);
+      offsetX += panX;
+      offsetY += panY;
+
+      // Ensure the image always fully covers the canvas boundary without black gaps
+      if (drawWidth >= width) {
+        offsetX = Math.min(0, Math.max(width - drawWidth, offsetX));
+      }
+      if (drawHeight >= height) {
+        offsetY = Math.min(0, Math.max(height - drawHeight, offsetY));
+      }
     }
 
     ctx.imageSmoothingEnabled = true;

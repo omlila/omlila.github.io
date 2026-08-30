@@ -11,6 +11,12 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
   const [activeLineIndex, setActiveLineIndex] = useState(-1);
   const [activeWordIndex, setActiveWordIndex] = useState(-1);
 
+  // Compute fallback duration from lyrics if audio duration is not yet available
+  const lyricsDuration = lyrics && lyrics.length > 0
+    ? Math.max(...lyrics.map((l) => l.endTime || 0), 20)
+    : 30;
+  const effectiveDuration = duration > 0 ? duration : lyricsDuration;
+
   useEffect(() => {
     if (!audioRef.current) {
       audioRef.current = new Audio();
@@ -19,12 +25,14 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
     audio.volume = volume;
 
     const handleLoadedMetadata = () => {
-      setDuration(audio.duration || 0);
+      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+        setDuration(audio.duration);
+      }
     };
 
     const handleEnded = () => {
       setIsPlaying(false);
-      setCurrentTime(audio.duration || 0);
+      setCurrentTime(audio.duration || effectiveDuration);
     };
 
     const handlePlay = () => setIsPlaying(true);
@@ -41,7 +49,7 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
     };
-  }, []);
+  }, [effectiveDuration]);
 
   useEffect(() => {
     if (audioRef.current && audioUrl) {
@@ -52,17 +60,35 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
     }
   }, [audioUrl]);
 
+  // Robust animation loop that advances time even if audio is synthesized / silent
   useEffect(() => {
     let animFrameId: number;
+    let lastTime = performance.now();
 
-    const updateTimeLoop = () => {
-      if (audioRef.current && !audioRef.current.paused) {
+    const updateTimeLoop = (now: number) => {
+      const delta = (now - lastTime) / 1000;
+      lastTime = now;
+
+      if (audioRef.current && !audioRef.current.paused && !audioRef.current.ended && audioUrl) {
         setCurrentTime(audioRef.current.currentTime);
+      } else if (isPlaying) {
+        setCurrentTime((prev) => {
+          const next = prev + delta;
+          if (next >= effectiveDuration) {
+            setIsPlaying(false);
+            return 0;
+          }
+          return next;
+        });
+      }
+
+      if (isPlaying) {
         animFrameId = requestAnimationFrame(updateTimeLoop);
       }
     };
 
     if (isPlaying) {
+      lastTime = performance.now();
       animFrameId = requestAnimationFrame(updateTimeLoop);
     }
 
@@ -71,8 +97,9 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
         cancelAnimationFrame(animFrameId);
       }
     };
-  }, [isPlaying]);
+  }, [isPlaying, audioUrl, effectiveDuration]);
 
+  // Calculate active line and word
   useEffect(() => {
     if (!lyrics || lyrics.length === 0) {
       setActiveLineIndex(-1);
@@ -107,15 +134,19 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
   }, [currentTime, lyrics]);
 
   const play = useCallback(() => {
+    setIsPlaying(true);
     if (audioRef.current && audioUrl) {
-      if (audioRef.current.currentTime >= audioRef.current.duration) {
+      if (audioRef.current.currentTime >= (audioRef.current.duration || effectiveDuration)) {
         audioRef.current.currentTime = 0;
       }
-      audioRef.current.play().catch(console.error);
+      audioRef.current.play().catch((err) => {
+        console.warn('Audio play notice (clock fallback active):', err);
+      });
     }
-  }, [audioUrl]);
+  }, [audioUrl, effectiveDuration]);
 
   const pause = useCallback(() => {
+    setIsPlaying(false);
     if (audioRef.current) {
       audioRef.current.pause();
     }
@@ -130,11 +161,12 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
   }, [isPlaying, play, pause]);
 
   const seek = useCallback((time: number) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = time;
-      setCurrentTime(time);
+    const clampedTime = Math.max(0, Math.min(time, effectiveDuration));
+    if (audioRef.current && audioUrl) {
+      audioRef.current.currentTime = clampedTime;
     }
-  }, []);
+    setCurrentTime(clampedTime);
+  }, [audioUrl, effectiveDuration]);
 
   const setVolume = useCallback((vol: number) => {
     const clamped = Math.max(0, Math.min(1, vol));
@@ -152,7 +184,7 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
     audioRef,
     isPlaying,
     currentTime,
-    duration,
+    duration: effectiveDuration,
     volume,
     audioUrl,
     activeLineIndex,

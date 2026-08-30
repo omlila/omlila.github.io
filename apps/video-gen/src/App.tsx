@@ -212,7 +212,7 @@ export default function App() {
     setAudioUrl,
     audioUrl,
     audioRef,
-  } = useLyricAudioSync(lyrics, initialPreset.audioUrl);
+  } = useLyricAudioSync(lyrics, initialPreset.audioUrl || `${baseUrl}aama.wav`);
 
   const beatSync = useBeatSync(
     styleConfig.enableBeatSync ?? false,
@@ -321,7 +321,7 @@ export default function App() {
     }
 
     const type = presetId.includes('lofi') ? 'lofi' : 'synthwave';
-    const audioUrl = createSynthesizedAudioUrl(type);
+    const audioUrl = preset.audioUrl || (presetId === 'cinematic-journey' ? `${baseUrl}aama.wav` : createSynthesizedAudioUrl(type));
     setAudioUrl(audioUrl);
   };
 
