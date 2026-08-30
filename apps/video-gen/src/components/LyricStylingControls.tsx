@@ -158,19 +158,19 @@ export const LyricStylingControls: React.FC<LyricStylingControlsProps> = ({
         </button>
       </div>
 
-      {/* OpenReel Keyframe Easing Curves Grid */}
+      {/* Motion Easing Curves Grid */}
       <div className="md-surface-container p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold text-[var(--md-sys-color-primary)]">
             <CurveIcon className="w-5 h-5 text-[var(--md-sys-color-primary)]" aria-hidden="true" />
-            <span>OpenReel Motion Easing Curves</span>
+            <span>Motion Easing Curves</span>
           </div>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)]">
             {style.motionCurve || 'smooth'}
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3" role="group" aria-label="OpenReel Motion Easing Curves">
+        <div className="grid grid-cols-2 gap-3" role="group" aria-label="Motion Easing Curves">
           {MOTION_CURVES.map((curve) => {
             const isActive = (style.motionCurve || 'smooth') === curve.id;
             return (

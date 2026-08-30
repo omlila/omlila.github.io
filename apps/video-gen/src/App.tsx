@@ -141,7 +141,7 @@ export default function App() {
 
   const handleExportProjectBackup = () => {
     const projectData = {
-      appName: 'OpenReel 4K Lyrical Studio',
+      appName: 'Omlila Video Generator',
       version: 1,
       exportedAt: new Date().toISOString(),
       lyrics,
@@ -503,7 +503,7 @@ export default function App() {
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-[var(--md-sys-color-on-surface)] m-0">
-                  Studio Lyrical Creator
+                  Omlila Video Generator
                 </h1>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-[var(--md-sys-color-tertiary-container)] text-[var(--md-sys-color-on-tertiary-container)]">
                   4K WebCodecs
