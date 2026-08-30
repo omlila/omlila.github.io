@@ -266,41 +266,54 @@ export function parseVtt(content: string): LyricLine[] {
  * Unescapes RTF format unicode characters (e.g. \u2343) and strips RTF markup tags.
  */
 export function unescapeRtf(rtfContent: string): string {
-  if (!rtfContent || (!rtfContent.includes('\\rtf') && !rtfContent.includes('\\u23') && !rtfContent.includes('\\ansi'))) {
+  if (!rtfContent) return '';
+  if (!rtfContent.includes('{\\rtf') && !rtfContent.includes('\\rtf') && !rtfContent.includes('\\u23') && !rtfContent.includes('\\ansi')) {
     return rtfContent;
   }
 
-  // Replace RTF unicode escapes \u2343 or \u-4234
-  const unescaped = rtfContent.replace(/\\u(-?\d+)\s?/g, (_, valStr) => {
+  let text = rtfContent;
+
+  // 1. Remove binary/metadata destination groups like {\fonttbl...}, {\colortbl...}, {\*\expandedcolortbl...}, {\stylesheet...}, {\info...}
+  text = text.replace(/\{\\\*(?:[^{}]|\{[^{}]*\})*\}/g, '');
+  text = text.replace(/\{\\(?:fonttbl|colortbl|stylesheet|info|themedata)(?:[^{}]|\{[^{}]*\})*\}/g, '');
+
+  // 2. Normalize line breaks: \par, \line, \softline, \row, \page, or trailing backslash on lines
+  text = text.replace(/\\(?:par|line|softline|row|page)\b/g, '\n');
+  text = text.replace(/\\(?:\r?\n)/g, '\n');
+
+  // 3. Handle Unicode escapes: \uN or \u-N followed by optional space delimiter
+  text = text.replace(/\\u(-?\d+)\s?/g, (_, valStr) => {
     let val = parseInt(valStr, 10);
     if (val < 0) val += 65536;
     return String.fromCharCode(val);
   });
 
-  const lines = unescaped.split(/\r?\n/);
-  const cleanedLines: string[] = [];
-
-  lines.forEach((line) => {
-    // Strip RTF control words like \pard, \f0, \fs24, \cf0, \partightenfactor0, {}, etc.
-    const clean = line
-      .replace(/\\[a-zA-Z0-9-]+\s?/g, '')
-      .replace(/[\{\}]/g, '')
-      .trim();
-
-    if (
-      clean &&
-      !clean.startsWith('rtf') &&
-      !clean.startsWith('ansi') &&
-      !clean.startsWith('fonttbl') &&
-      !clean.startsWith('colortbl') &&
-      !clean.startsWith('expandedcolortbl') &&
-      !clean.startsWith('margl')
-    ) {
-      cleanedLines.push(clean);
-    }
+  // 4. Hex characters like \'92
+  text = text.replace(/\\'([0-9a-fA-F]{2})/g, (_, hex) => {
+    return String.fromCharCode(parseInt(hex, 16));
   });
 
-  return cleanedLines.join('\n');
+  // 5. Special RTF escapes
+  text = text.replace(/\\~/g, ' ');
+  text = text.replace(/\\_/g, '-');
+  text = text.replace(/\\\{/g, '{');
+  text = text.replace(/\\\}/g, '}');
+  text = text.replace(/\\\\/g, '\\');
+
+  // 6. Strip all remaining RTF control words (\word[digits] with optional space)
+  text = text.replace(/\\[a-zA-Z]+-?\d*\s?/g, '');
+
+  // 7. Remove remaining group braces { and } and trailing line backslashes
+  text = text.replace(/[{}]/g, '');
+  text = text.replace(/\\$/gm, '');
+
+  // 8. Clean up lines
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith('rtf') && !l.startsWith('ansi') && !l.startsWith('cocoa') && !l.startsWith('vieww') && !l.startsWith('margl'));
+
+  return lines.join('\n');
 }
 
 /**

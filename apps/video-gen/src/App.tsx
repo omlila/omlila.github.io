@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { AspectRatio, AppWorkspaceTheme, ExportConfig, ExportStatus, LyricLine, MediaSequenceItem, ResolutionQuality, StyleConfig } from './types';
 import { QUALITY_CONFIGS } from './types';
 import { WORKSPACE_THEMES } from './data/appThemes';
-import { parseLyricCues, formatLyricCuesToLrc } from './utils/lrcParser';
+import { parseLyricCues, formatLyricCuesToLrc, unescapeRtf, autoSpreadLyricTimings } from './utils/lrcParser';
 import { createSynthesizedAudioUrl, SAMPLE_PRESETS } from './data/samplePresets';
 import { THEME_PRESETS } from './data/themePresets';
 import { useLyricAudioSync } from './hooks/useLyricAudioSync';
@@ -369,8 +369,10 @@ export default function App() {
   };
 
   const handleLrcTextChange = (text: string) => {
-    setLrcInputText(text);
-    const parsed = parseLyricCues(text);
+    const isRtf = text.includes('{\\rtf') || text.includes('\\rtf');
+    const cleanText = isRtf ? unescapeRtf(text) : text;
+    setLrcInputText(cleanText);
+    const parsed = parseLyricCues(cleanText);
     setLyrics(parsed);
   };
 
@@ -411,8 +413,25 @@ export default function App() {
     if (file) {
       const reader = new FileReader();
       reader.onload = (event) => {
-        const content = event.target?.result as string;
-        if (content) handleLrcTextChange(content);
+        const rawContent = event.target?.result as string;
+        if (rawContent) {
+          const isRtf = file.name.toLowerCase().endsWith('.rtf') || rawContent.includes('{\\rtf') || rawContent.includes('\\rtf');
+          const cleanText = isRtf ? unescapeRtf(rawContent) : rawContent;
+          let parsed = parseLyricCues(cleanText);
+
+          // If raw input doesn't have standard bracketed timestamps, auto-spread across audio duration
+          const hasTimestamps = /\[\d{2}:\d{2}/.test(cleanText);
+          if (!hasTimestamps && parsed.length > 0) {
+            const targetDuration = duration > 0 ? duration : 218.2;
+            parsed = autoSpreadLyricTimings(parsed, targetDuration, 8);
+            const formattedLrc = formatLyricCuesToLrc(parsed);
+            setLrcInputText(formattedLrc);
+            setLyrics(parsed);
+          } else {
+            setLrcInputText(cleanText);
+            setLyrics(parsed);
+          }
+        }
       };
       reader.readAsText(file);
     }
