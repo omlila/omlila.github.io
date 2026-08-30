@@ -229,6 +229,13 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
           }
         }
 
+        // Pause any inactive background video elements to keep audio/video tightly synced
+        loadedMediaCache.current.forEach((el) => {
+          if (el instanceof HTMLVideoElement && el !== media && el !== nextMedia && !el.paused) {
+            el.pause();
+          }
+        });
+
         return {
           media: media || null,
           activeItem: item,

@@ -45,6 +45,8 @@ export function renderLyricFrame(
 ) {
   ctx.save();
   ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = style.backgroundColor || '#09090b';
+  ctx.fillRect(0, 0, width, height);
 
   // Helper for drawing media with Ken Burns
   const drawMediaLayer = (
