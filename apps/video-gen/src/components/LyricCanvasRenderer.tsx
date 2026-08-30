@@ -238,7 +238,8 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
               if (media.paused) {
                 media.play().catch(() => {});
               }
-              if (Math.abs(media.currentTime - expectedVideoTime) > 0.25) {
+              // Only seek on noticeable drift (>0.6s) so video decoders run smoothly without frame-drop stutter
+              if (Math.abs(media.currentTime - expectedVideoTime) > 0.6) {
                 media.currentTime = expectedVideoTime;
               }
             } else {
@@ -279,8 +280,11 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
               if (nextMedia.paused) {
                 nextMedia.play().catch(() => {});
               }
-              if (Math.abs(nextMedia.currentTime - nextExpectedTime) > 0.25) {
-                nextMedia.currentTime = nextExpectedTime;
+              // Prime incoming video decoder cleanly when entering transition window
+              if (sceneInfo.transitionProgress < 0.08 || Math.abs(nextMedia.currentTime - nextExpectedTime) > 0.6) {
+                if (Math.abs(nextMedia.currentTime - nextExpectedTime) > 0.25) {
+                  nextMedia.currentTime = nextExpectedTime;
+                }
               }
             } else {
               if (!nextMedia.paused) {

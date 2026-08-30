@@ -74,8 +74,9 @@ export function renderLyricFrame(
       ctx.globalAlpha = Math.max(0, Math.min(1, globalAlpha));
     }
 
-    // Ken Burns (Zoom / Pan) Motion Effect: Starts full-screen with overscan to eliminate edge gaps
-    if (style.enableKenBurns) {
+    // Ken Burns (Zoom / Pan) Motion Effect: Only apply to STILL PHOTOS (images), never to live video clips!
+    const isStillImage = !(media instanceof HTMLVideoElement);
+    if (style.enableKenBurns && isStillImage) {
       const minOverscan = 1.15;
       const zoomCycle = (1 + Math.sin(currentTime * 0.15)) * 0.5; // 0.0 to 1.0
       const kbZoom = minOverscan + zoomCycle * 0.12; // 1.15 to 1.27
@@ -88,7 +89,7 @@ export function renderLyricFrame(
     let offsetX = (width - drawWidth) / 2 + (width * ((transformToUse?.offsetXPercent ?? 0) / 100));
     let offsetY = (height - drawHeight) / 2 + (height * ((transformToUse?.offsetYPercent ?? 0) / 100));
 
-    if (style.enableKenBurns) {
+    if (style.enableKenBurns && isStillImage) {
       const maxPanX = Math.max(0, (drawWidth - width) / 2);
       const maxPanY = Math.max(0, (drawHeight - height) / 2);
       const panX = Math.cos(currentTime * 0.08) * (maxPanX * 0.6);
