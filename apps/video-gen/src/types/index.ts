@@ -81,6 +81,7 @@ export const QUALITY_CONFIGS: Record<ResolutionQuality, QualityConfig> = {
 };
 
 export type TextStyleAnimation =
+  | 'clean-subtitle'
   | 'karaoke'
   | 'pop'
   | 'bounce'
@@ -93,6 +94,7 @@ export type TextStyleAnimation =
   | 'blur-reveal';
 
 export type VisualThemePreset =
+  | 'clean-subtitle'
   | 'mother-love'
   | 'cartoon'
   | 'cyberpunk'

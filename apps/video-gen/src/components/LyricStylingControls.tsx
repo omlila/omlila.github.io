@@ -66,6 +66,7 @@ const FONTS = [
 ];
 
 const ANIMATION_TYPES: { id: TextStyleAnimation; label: string; desc: string }[] = [
+  { id: 'clean-subtitle', label: 'Clean Subtitle', desc: 'Minimal solid typography with subtle transparent backdrop' },
   { id: 'karaoke', label: 'Karaoke Fill', desc: 'Progressive word-by-word active highlight' },
   { id: 'pop', label: 'Pop & Scale', desc: 'Dynamic spring pop entry scale' },
   { id: 'wave', label: 'Wave Ripple', desc: 'Per-character sine wave oscillation' },

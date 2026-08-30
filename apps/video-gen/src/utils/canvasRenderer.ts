@@ -467,11 +467,12 @@ export function renderLyricFrame(
     if (perspectiveDist < 0) perspectiveDist = 0;
     const perspectiveFade = style.enableLinePerspectiveFade ? Math.max(0.15, 1.0 - perspectiveDist * (style.perspectiveFadeStrength ?? 0.3)) : 1.0;
     let fadeAlpha = isCurrentlyActive ? 1.0 : isPast ? (0.45 * perspectiveFade) : (0.25 * perspectiveFade);
-    const activeExtraScale = style.enableFontWeightPop ? (style.activeLineExtraScale ?? 1.1) : 1.05;
+    const isCleanSubtitle = style.animationType === 'clean-subtitle';
+    const activeExtraScale = isCleanSubtitle ? 1.0 : (style.enableFontWeightPop ? (style.activeLineExtraScale ?? 1.1) : 1.05);
     // B1: Beat-sync drives scale pulse on active line
-    const beatScaleBoost = (style.enableBeatSync && (style.beatSyncTarget ?? 'lyrics') !== 'background')
+    const beatScaleBoost = (!isCleanSubtitle && style.enableBeatSync && (style.beatSyncTarget ?? 'lyrics') !== 'background')
       ? beatStrength * 0.08 : 0;
-    let focusScale = isCurrentlyActive ? (activeExtraScale + beatScaleBoost) : 0.90; // scale up active, shrink inactive
+    let focusScale = isCurrentlyActive ? (activeExtraScale + beatScaleBoost) : (isCleanSubtitle ? 1.0 : 0.90); // scale up active, shrink inactive
     if (isCurrentlyActive && rawProgress < 0.15) {
       const enterRatio = rawProgress / 0.15;
       const transStyle = style.lineTransitionStyle ?? 'dissolve';
