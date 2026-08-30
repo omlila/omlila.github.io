@@ -243,11 +243,11 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
                 media.currentTime = expectedVideoTime;
               }
             } else {
-              // Reverse, Boomerang, or Freeze Frame
+              // Reverse, Boomerang, or Freeze Frame: Throttle seeking so hardware decoder doesn't stall
               if (!media.paused) {
                 media.pause();
               }
-              if (Math.abs(media.currentTime - expectedVideoTime) > 0.03) {
+              if (Math.abs(media.currentTime - expectedVideoTime) > 0.08) {
                 media.currentTime = expectedVideoTime;
               }
             }
@@ -255,7 +255,7 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
             if (!media.paused) {
               media.pause();
             }
-            if (Math.abs(media.currentTime - expectedVideoTime) > 0.03) {
+            if (Math.abs(media.currentTime - expectedVideoTime) > 0.05) {
               media.currentTime = expectedVideoTime;
             }
           }
@@ -290,7 +290,7 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
               if (!nextMedia.paused) {
                 nextMedia.pause();
               }
-              if (Math.abs(nextMedia.currentTime - nextExpectedTime) > 0.03) {
+              if (Math.abs(nextMedia.currentTime - nextExpectedTime) > 0.08) {
                 nextMedia.currentTime = nextExpectedTime;
               }
             }

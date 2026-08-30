@@ -486,9 +486,13 @@ export function renderLyricFrame(
   if (activeIndex !== -1) {
     startIndex = Math.max(0, activeIndex - Math.floor(linesToShow / 2));
   }
-  startIndex = Math.min(startIndex, Math.max(0, lyrics.length - linesToShow));
-
-  const visibleLines = lyrics.slice(startIndex, startIndex + linesToShow);
+  let visibleLines = lyrics.slice(startIndex, startIndex + linesToShow);
+  const activeLine = lyrics[activeIndex];
+  if (activeLine && (activeLine.role === 'dedication' || activeLine.role === 'title')) {
+    visibleLines = [activeLine];
+  } else {
+    visibleLines = visibleLines.filter(line => line.role !== 'dedication' && line.role !== 'title');
+  }
 
   if (visibleLines.length === 0) {
     ctx.restore();
@@ -620,15 +624,19 @@ export function renderLyricFrame(
     }
 
     // Special Smooth Cinematic Dissolve for Dedication & Title Cards
-    if (isCurrentlyActive && (line.role === 'dedication' || line.role === 'title' || line.customAnimation === 'cinematic-dissolve')) {
-      const elapsed = currentTime - line.startTime;
-      const remaining = line.endTime - currentTime;
-      if (elapsed < 1.0) {
-        fadeAlpha = Math.max(0.0, Math.min(1.0, elapsed / 1.0));
-      } else if (remaining < 1.0) {
-        fadeAlpha = Math.max(0.0, Math.min(1.0, remaining / 1.0));
+    if (line.role === 'dedication' || line.role === 'title' || line.customAnimation === 'cinematic-dissolve') {
+      if (!isCurrentlyActive) {
+        fadeAlpha = 0.0;
       } else {
-        fadeAlpha = 1.0;
+        const elapsed = currentTime - line.startTime;
+        const remaining = line.endTime - currentTime;
+        if (elapsed < 1.0) {
+          fadeAlpha = Math.max(0.0, Math.min(1.0, elapsed / 1.0));
+        } else if (remaining < 1.0) {
+          fadeAlpha = Math.max(0.0, Math.min(1.0, remaining / 1.0));
+        } else {
+          fadeAlpha = 1.0;
+        }
       }
     }
 
