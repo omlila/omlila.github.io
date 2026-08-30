@@ -226,10 +226,10 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
 
         // Sync video smoothly with direction, trimming, slow motion & time-stretching support
         if (media && media instanceof HTMLVideoElement) {
-          const effectiveSpeed = calculateEffectivePlaybackRate(item, style.videoPlaybackRate ?? 1.0);
+          const vidDuration = (media.duration && !isNaN(media.duration) && media.duration > 0) ? media.duration : 100;
+          const effectiveSpeed = calculateEffectivePlaybackRate(item, style.videoPlaybackRate ?? 1.0, vidDuration);
           media.playbackRate = effectiveSpeed;
 
-          const vidDuration = (media.duration && !isNaN(media.duration) && media.duration > 0) ? media.duration : 100;
           const expectedVideoTime = calculateVideoTime(item, sceneInfo.timeInScene, vidDuration);
           const direction = item.playbackDirection || 'forward';
 
@@ -276,7 +276,7 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
             const nextDir = nextItem.playbackDirection || 'forward';
 
             if (isPlaying && nextDir === 'forward') {
-              nextMedia.playbackRate = calculateEffectivePlaybackRate(nextItem, style.videoPlaybackRate ?? 1.0);
+              nextMedia.playbackRate = calculateEffectivePlaybackRate(nextItem, style.videoPlaybackRate ?? 1.0, nextDuration);
               if (nextMedia.paused) {
                 nextMedia.play().catch(() => {});
               }
