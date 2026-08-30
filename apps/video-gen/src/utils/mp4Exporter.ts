@@ -75,7 +75,9 @@ async function preloadMediaSequence(items: MediaSequenceItem[]): Promise<Map<str
     return new Promise<void>((resolve) => {
       if (item.type === 'image') {
         const img = new Image();
-        img.crossOrigin = 'anonymous';
+        if (!item.url.startsWith('blob:') && !item.url.startsWith('data:')) {
+          img.crossOrigin = 'anonymous';
+        }
         img.src = item.url;
         img.onload = () => {
           loadedMap.set(item.id, img);
@@ -84,7 +86,9 @@ async function preloadMediaSequence(items: MediaSequenceItem[]): Promise<Map<str
         img.onerror = () => resolve();
       } else {
         const video = document.createElement('video');
-        video.crossOrigin = 'anonymous';
+        if (!item.url.startsWith('blob:') && !item.url.startsWith('data:')) {
+          video.crossOrigin = 'anonymous';
+        }
         video.src = item.url;
         video.muted = true;
         video.playsInline = true;

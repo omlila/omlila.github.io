@@ -46,12 +46,22 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
 
   const targetDim = ASPECT_RATIOS[aspectRatio] || ASPECT_RATIOS['9:16'];
 
-  // Preload sequence images and videos with instant cache population
+  // Preload sequence images and videos with instant cache population & stale URL recovery
   useEffect(() => {
     if (!mediaItems || mediaItems.length === 0) return;
 
     mediaItems.forEach((item) => {
-      if (loadedMediaCache.current.has(item.id)) return;
+      const existingEl = loadedMediaCache.current.get(item.id);
+      if (existingEl) {
+        // If blob URL was refreshed by IndexedDB rehydration, update src and reload
+        if (item.url && (existingEl as any).src !== item.url) {
+          (existingEl as any).src = item.url;
+          if (existingEl instanceof HTMLVideoElement) {
+            existingEl.load();
+          }
+        }
+        return;
+      }
 
       // Share already-loaded media element if same URL or sourceVideoId exists
       if (item.url) {
@@ -111,8 +121,16 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
   // Fail-safe media element resolver (never returns null for valid items)
   const getMediaElement = (item: MediaSequenceItem | undefined): HTMLImageElement | HTMLVideoElement | null => {
     if (!item) return null;
-    const cached = loadedMediaCache.current.get(item.id);
-    if (cached) return cached;
+    let cached = loadedMediaCache.current.get(item.id);
+    if (cached) {
+      if (item.url && (cached as any).src !== item.url) {
+        (cached as any).src = item.url;
+        if (cached instanceof HTMLVideoElement) {
+          cached.load();
+        }
+      }
+      return cached;
+    }
 
     if (item.url) {
       for (const [id, el] of loadedMediaCache.current.entries()) {
@@ -126,6 +144,9 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
       if (item.type === 'video') {
         const v = document.createElement('video');
         v.preload = 'auto';
+        if (!item.url.startsWith('blob:') && !item.url.startsWith('data:')) {
+          v.crossOrigin = 'anonymous';
+        }
         v.src = item.url;
         v.loop = true;
         v.muted = true;
@@ -141,6 +162,9 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
         return v;
       } else {
         const img = new Image();
+        if (!item.url.startsWith('blob:') && !item.url.startsWith('data:')) {
+          img.crossOrigin = 'anonymous';
+        }
         img.src = item.url;
         loadedMediaCache.current.set(item.id, img);
         return img;
