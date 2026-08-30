@@ -57,41 +57,61 @@ export default function App() {
   });
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
   const [activeTab, setActiveTab] = useState<'styles' | 'media' | 'lyrics'>('styles');
+  const defaultMediaItems: MediaSequenceItem[] = [
+    {
+      id: 'default_bg_1',
+      name: 'Golden Sunset Mountains',
+      type: 'image',
+      url: `${baseUrl}mother_golden.jpg`,
+      durationSec: 70.0,
+    },
+    {
+      id: 'default_bg_2',
+      name: 'Moonlight Night',
+      type: 'image',
+      url: `${baseUrl}mother_night.jpg`,
+      durationSec: 70.0,
+    },
+    {
+      id: 'default_bg_3',
+      name: 'Blooming Rhododendron Hills',
+      type: 'image',
+      url: `${baseUrl}mother_flowers.jpg`,
+      durationSec: 80.0,
+    },
+  ];
+
   const [bgMediaUrl, setBgMediaUrl] = useState<string | undefined>(initialPreset.coverImage);
   const [mediaItems, setMediaItems] = useState<MediaSequenceItem[]>(() => {
     try {
       const saved = localStorage.getItem('omlila_saved_mediaItems');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Replace any revoked blob URLs with fallback static image
+          return parsed.map((item, idx) => {
+            if (item.url && item.url.startsWith('blob:')) {
+              const fallbackUrl = defaultMediaItems[idx % defaultMediaItems.length]?.url || `${baseUrl}mother_golden.jpg`;
+              return { ...item, url: fallbackUrl };
+            }
+            return item;
+          });
+        }
+      }
     } catch (e) {}
-    return [
-      {
-        id: 'default_bg_1',
-        name: 'Golden Sunset Mountains',
-        type: 'image',
-        url: `${baseUrl}mother_golden.jpg`,
-        durationSec: 70.0,
-      },
-      {
-        id: 'default_bg_2',
-        name: 'Moonlight Night',
-        type: 'image',
-        url: `${baseUrl}mother_night.jpg`,
-        durationSec: 70.0,
-      },
-      {
-        id: 'default_bg_3',
-        name: 'Blooming Rhododendron Hills',
-        type: 'image',
-        url: `${baseUrl}mother_flowers.jpg`,
-        durationSec: 80.0,
-      },
-    ];
+    return defaultMediaItems;
   });
 
   const [styleConfig, setStyleConfig] = useState<StyleConfig>(() => {
     try {
       const saved = localStorage.getItem('omlila_saved_styleConfig');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.backgroundImageUrl && parsed.backgroundImageUrl.startsWith('blob:')) {
+          parsed.backgroundImageUrl = `${baseUrl}mother_golden.jpg`;
+        }
+        return parsed;
+      }
     } catch (e) {}
     return {
       ...initialTheme.style,
@@ -237,13 +257,19 @@ export default function App() {
   useEffect(() => {
     const restoreBlobs = async () => {
       let needsMediaUpdate = false;
-      const restoredItems = await Promise.all(mediaItems.map(async (item) => {
-        if (item.url.startsWith('blob:')) {
-          const file = await getMediaFile(item.id);
-          if (file) {
-            needsMediaUpdate = true;
-            return { ...item, url: URL.createObjectURL(file) };
-          }
+      const restoredItems = await Promise.all(mediaItems.map(async (item, idx) => {
+        if (item.url && item.url.startsWith('blob:')) {
+          try {
+            const file = await getMediaFile(item.id);
+            if (file) {
+              needsMediaUpdate = true;
+              return { ...item, url: URL.createObjectURL(file) };
+            }
+          } catch (e) {}
+          // Dead blob URL not found in IndexedDB - fallback to safe static asset
+          needsMediaUpdate = true;
+          const fallbackUrl = defaultMediaItems[idx % defaultMediaItems.length]?.url || `${baseUrl}mother_golden.jpg`;
+          return { ...item, url: fallbackUrl };
         }
         return item;
       }));
@@ -252,9 +278,15 @@ export default function App() {
         setMediaItems(restoredItems);
       }
 
-      const savedAudio = await getAudioFile();
-      if (savedAudio) {
-        setAudioUrl(URL.createObjectURL(savedAudio));
+      try {
+        const savedAudio = await getAudioFile();
+        if (savedAudio && savedAudio.size > 0) {
+          setAudioUrl(URL.createObjectURL(savedAudio));
+        } else {
+          setAudioUrl(`${baseUrl}aama.wav`);
+        }
+      } catch (e) {
+        setAudioUrl(`${baseUrl}aama.wav`);
       }
     };
     
