@@ -114,6 +114,34 @@ async function loadAudioBuffer(audioUrl: string): Promise<AudioBuffer | null> {
   }
 }
 
+function seekVideoToTime(video: HTMLVideoElement, targetTime: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (Math.abs(video.currentTime - targetTime) < 0.02) {
+      return resolve();
+    }
+    let handled = false;
+    const onSeeked = () => {
+      if (handled) return;
+      handled = true;
+      video.removeEventListener('seeked', onSeeked);
+      resolve();
+    };
+    video.addEventListener('seeked', onSeeked, { once: true });
+    try {
+      video.currentTime = targetTime;
+    } catch {
+      resolve();
+    }
+    setTimeout(() => {
+      if (!handled) {
+        handled = true;
+        video.removeEventListener('seeked', onSeeked);
+        resolve();
+      }
+    }, 45);
+  });
+}
+
 /**
  * Encodes and exports video frame-by-frame locally in browser using WebCodecs API and mp4-muxer.
  * Supports up to 4K Ultra HD resolution & 60 FPS with full AAC stereo audio!
@@ -339,6 +367,9 @@ export async function exportLyricalVideoMP4(
     let activeFrameBg = bgMedia;
     let nextFrameBg = null;
     let transitionProgress = 0;
+    let activeItemObj: MediaSequenceItem | null = null;
+    let activeItemAccTime = 0;
+    let nextItemObj: MediaSequenceItem | null = null;
     
     if (mediaItems && mediaItems.length > 0) {
       const totalSeqDuration = mediaItems.reduce((acc, item) => acc + item.durationSec, 0);
@@ -350,11 +381,14 @@ export async function exportLyricalVideoMP4(
         const nextTime = accumulatedTime + item.durationSec;
         if (loopedTime >= accumulatedTime && loopedTime <= nextTime) {
           activeFrameBg = loadedSequenceMap.get(item.id) || bgMedia;
+          activeItemObj = item;
+          activeItemAccTime = accumulatedTime;
           
           const crossfadeDuration = style.sequenceCrossfadeDuration ?? 1.0;
           if (crossfadeDuration > 0 && mediaItems.length > 1 && loopedTime > nextTime - crossfadeDuration) {
             const nextItem = mediaItems[(i + 1) % mediaItems.length];
             nextFrameBg = loadedSequenceMap.get(nextItem.id) || null;
+            nextItemObj = nextItem;
             transitionProgress = Math.max(0, Math.min(1, (loopedTime - (nextTime - crossfadeDuration)) / crossfadeDuration));
           }
           break;
@@ -365,6 +399,27 @@ export async function exportLyricalVideoMP4(
       if (!activeFrameBg && loadedSequenceMap.size > 0) {
         activeFrameBg = loadedSequenceMap.values().next().value;
       }
+    }
+
+    // Precise frame-accurate video seeking for slow-motion & time-stretching
+    if (activeFrameBg instanceof HTMLVideoElement && activeFrameBg.duration > 0) {
+      let speed = activeItemObj?.playbackRate ?? (style.enableVideoSlowMotion ? (style.videoPlaybackRate ?? 0.5) : 1.0);
+      if (activeItemObj?.videoTimeStretchMode === 'auto-fit-duration' && activeItemObj?.durationSec > 0) {
+        speed = Math.min(2.0, Math.max(0.1, activeFrameBg.duration / activeItemObj.durationSec));
+      } else if (activeItemObj?.videoTimeStretchMode === 'slow-motion') {
+        speed = activeItemObj?.playbackRate || 0.5;
+      }
+      const totalSeqDuration = mediaItems && mediaItems.length > 0 ? mediaItems.reduce((acc, item) => acc + item.durationSec, 0) : 0;
+      const loopedTime = totalSeqDuration > 0 ? timeSec % totalSeqDuration : timeSec;
+      const timeSinceClipStart = loopedTime - activeItemAccTime;
+      const targetTime = (timeSinceClipStart * speed) % activeFrameBg.duration;
+      await seekVideoToTime(activeFrameBg, targetTime);
+    }
+
+    if (nextFrameBg instanceof HTMLVideoElement && nextFrameBg.duration > 0) {
+      const nextSpeed = nextItemObj?.playbackRate ?? 1.0;
+      const nextTargetTime = (transitionProgress * nextSpeed) % nextFrameBg.duration;
+      await seekVideoToTime(nextFrameBg, nextTargetTime);
     }
 
     renderLyricFrame(ctx, width, height, lyrics, timeSec, durationSec, style, activeFrameBg, nextFrameBg, transitionProgress);

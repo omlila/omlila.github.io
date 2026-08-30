@@ -143,11 +143,15 @@ export interface MediaSequenceItem {
   thumbnailUrl?: string;
   element?: HTMLImageElement | HTMLVideoElement;
   transform?: BackgroundTransformConfig;
+  playbackRate?: number; // 0.1x to 2.0x video playback speed
+  videoTimeStretchMode?: 'slow-motion' | 'loop' | 'auto-fit-duration' | 'freeze-frame';
 }
 
 export interface StyleConfig {
   showLyrics?: boolean; // Optional lyrics toggle (true = render lyrics, false = pure video/slideshow)
   motionCurve?: MotionCurve; // OpenReel-inspired animation easing curves
+  videoPlaybackRate?: number; // Global video speed multiplier (0.25x to 2.0x)
+  enableVideoSlowMotion?: boolean; // Global video slow-motion toggle
   textPosition?: TextPositionConfig;
   backgroundTransform?: BackgroundTransformConfig;
   themePreset?: VisualThemePreset;

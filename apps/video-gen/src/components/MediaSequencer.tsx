@@ -1,6 +1,6 @@
 import React from 'react';
 import type { MediaSequenceItem, StyleConfig } from '../types';
-import { Upload, Trash2, ArrowLeft, ArrowRight, Image as ImageIcon, Clock, Sparkles, Wand2, Layers } from 'lucide-react';
+import { Upload, Trash2, ArrowLeft, ArrowRight, Image as ImageIcon, Clock, Sparkles, Wand2, Layers, Gauge } from 'lucide-react';
 
 interface MediaSequencerProps {
   mediaItems: MediaSequenceItem[];
@@ -239,6 +239,37 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
                       End Here
                     </button>
                   </div>
+
+                  {item.type === 'video' && (
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <Gauge className="w-3.5 h-3.5 text-[var(--md-sys-color-primary)]" aria-hidden="true" />
+                      <label htmlFor={`speed-${item.id}`} className="sr-only">Speed for {item.name}</label>
+                      <select
+                        id={`speed-${item.id}`}
+                        value={item.videoTimeStretchMode === 'auto-fit-duration' ? 'auto-fit-duration' : (item.playbackRate ?? 0.5)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === 'auto-fit-duration') {
+                            onUpdateMediaItems(
+                              mediaItems.map(m => m.id === item.id ? { ...m, videoTimeStretchMode: 'auto-fit-duration' } : m)
+                            );
+                          } else {
+                            onUpdateMediaItems(
+                              mediaItems.map(m => m.id === item.id ? { ...m, playbackRate: Number(val), videoTimeStretchMode: 'slow-motion' } : m)
+                            );
+                          }
+                        }}
+                        className="bg-[var(--md-sys-color-surface-container-highest)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-1.5 py-0.5 text-xs font-mono rounded cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)] focus-visible:outline-none"
+                      >
+                        <option value="0.25">0.25x Super Slow</option>
+                        <option value="0.5">0.5x Slow-Motion (Smooth)</option>
+                        <option value="0.75">0.75x Cinematic Slow</option>
+                        <option value="1">1.0x Normal Speed</option>
+                        <option value="1.5">1.5x Fast</option>
+                        <option value="auto-fit-duration">Auto-Stretch to Fill Segment</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
               </div>
 
