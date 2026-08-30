@@ -264,6 +264,8 @@ export function parseVtt(content: string): LyricLine[] {
 
 /**
  * Unescapes RTF format unicode characters (e.g. \u2343) and strips RTF markup tags.
+ * Preserves true poetic lines by recognizing genuine RTF line/paragraph breaks (\par, \line, \\)
+ * and ignoring soft physical line wraps caused by font switching in RTF editors.
  */
 export function unescapeRtf(rtfContent: string): string {
   if (!rtfContent) return '';
@@ -277,9 +279,9 @@ export function unescapeRtf(rtfContent: string): string {
   text = text.replace(/\{\\\*(?:[^{}]|\{[^{}]*\})*\}/g, '');
   text = text.replace(/\{\\(?:fonttbl|colortbl|stylesheet|info|themedata)(?:[^{}]|\{[^{}]*\})*\}/g, '');
 
-  // 2. Normalize line breaks: \par, \line, \softline, \row, \page, or trailing backslash on lines
-  text = text.replace(/\\(?:par|line|softline|row|page)\b/g, '\n');
-  text = text.replace(/\\(?:\r?\n)/g, '\n');
+  // 2. Mark TRUE RTF line & paragraph breaks with a unique sentinel token
+  text = text.replace(/\\(?:par|line|softline|row|page)\b/g, ' __RTF_LINE_BREAK__ ');
+  text = text.replace(/\\(?:\r?\n)/g, ' __RTF_LINE_BREAK__ ');
 
   // 3. Handle Unicode escapes: \uN or \u-N followed by optional space delimiter
   text = text.replace(/\\u(-?\d+)\s?/g, (_, valStr) => {
@@ -303,17 +305,20 @@ export function unescapeRtf(rtfContent: string): string {
   // 6. Strip all remaining RTF control words (\word[digits] with optional space)
   text = text.replace(/\\[a-zA-Z]+-?\d*\s?/g, '');
 
-  // 7. Remove remaining group braces { and } and trailing line backslashes
+  // 7. Remove remaining group braces { and }
   text = text.replace(/[{}]/g, '');
-  text = text.replace(/\\$/gm, '');
 
-  // 8. Clean up lines
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0 && !l.startsWith('rtf') && !l.startsWith('ansi') && !l.startsWith('cocoa') && !l.startsWith('vieww') && !l.startsWith('margl'));
+  // 8. Replace soft physical newlines in RTF with regular spaces (since physical newlines are token separators, not line breaks)
+  text = text.replace(/[\r\n]+/g, ' ');
 
-  return lines.join('\n');
+  // 9. Split by our genuine RTF line break sentinel
+  const rawLines = text.split('__RTF_LINE_BREAK__');
+
+  const cleanedLines = rawLines
+    .map((l) => l.replace(/\s+/g, ' ').trim())
+    .filter((l) => l.length > 0 && !l.startsWith('rtf') && !l.startsWith('ansi') && !l.startsWith('cocoa') && !l.startsWith('vieww') && !l.startsWith('margl') && !l.startsWith('deftab'));
+
+  return cleanedLines.join('\n');
 }
 
 /**
