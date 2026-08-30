@@ -88,7 +88,7 @@ export const SAMPLE_PRESETS: SamplePreset[] = [
     title: 'Cinematic Journey',
     artist: 'Sample Artist',
     theme: 'cinematic',
-    audioUrl: '',
+    audioUrl: './demo_melody.wav',
     lrcContent: `[00:00.00] [Intro - Cinematic Swell]
 [00:04.00] The journey begins here
 [00:08.00] Colors painting the sky

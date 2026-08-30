@@ -79,30 +79,30 @@ export default function App() {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
   const [activeTab, setActiveTab] = useState<'styles' | 'media' | 'lyrics'>('styles');
   const [customAudioName, setCustomAudioName] = useState<string>(() => {
-    return localStorage.getItem('omlila_saved_audio_name') || 'आमा (Aama)';
+    return localStorage.getItem('omlila_saved_audio_name') || 'Cinematic Journey (Demo)';
   });
 
   const defaultMediaItems: MediaSequenceItem[] = [
     {
       id: 'default_bg_1',
-      name: 'Golden Sunset Mountains',
+      name: 'Golden Sunset Peaks',
       type: 'image',
-      url: `${baseUrl}mother_golden.jpg`,
-      durationSec: 70.0,
+      url: 'https://images.unsplash.com/photo-1447958272669-9c5ce24c8bf2?w=1920&auto=format&fit=crop&q=80',
+      durationSec: 8.0,
     },
     {
       id: 'default_bg_2',
-      name: 'Moonlight Night',
+      name: 'Mystic Starfield',
       type: 'image',
-      url: `${baseUrl}mother_night.jpg`,
-      durationSec: 70.0,
+      url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1920&auto=format&fit=crop&q=80',
+      durationSec: 8.0,
     },
     {
       id: 'default_bg_3',
-      name: 'Blooming Rhododendron Hills',
+      name: 'Neon Horizon',
       type: 'image',
-      url: `${baseUrl}mother_flowers.jpg`,
-      durationSec: 80.0,
+      url: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=1920&auto=format&fit=crop&q=80',
+      durationSec: 8.0,
     },
   ];
 
@@ -126,7 +126,7 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.backgroundImageUrl && parsed.backgroundImageUrl.startsWith('blob:')) {
-          parsed.backgroundImageUrl = `${baseUrl}mother_golden.jpg`;
+          parsed.backgroundImageUrl = 'https://images.unsplash.com/photo-1447958272669-9c5ce24c8bf2?w=1920&auto=format&fit=crop&q=80';
         }
         return parsed;
       }
@@ -149,7 +149,7 @@ export default function App() {
       backgroundType: 'image',
       backgroundColor: '#051c14',
       backgroundGradient: 'linear-gradient(135deg, #051c14, #064e3b, #064e3b)',
-      backgroundImageUrl: '/mother_golden.jpg',
+      backgroundImageUrl: 'https://images.unsplash.com/photo-1447958272669-9c5ce24c8bf2?w=1920&auto=format&fit=crop&q=80',
       backgroundBlur: 0,
       backgroundDarken: 0.3,
       linesToShow: 3,
@@ -260,7 +260,13 @@ export default function App() {
     setAudioUrl,
     audioUrl,
     audioRef,
-  } = useLyricAudioSync(lyrics, initialPreset.audioUrl || `${baseUrl}aama.wav`, beatSync.resumeAudioContext);
+  } = useLyricAudioSync(
+    lyrics, 
+    initialPreset.audioUrl 
+      ? (initialPreset.audioUrl.startsWith('http') ? initialPreset.audioUrl : `${baseUrl}${initialPreset.audioUrl.replace(/^\.\//, '')}`) 
+      : `${baseUrl}demo_melody.wav`, 
+    beatSync.resumeAudioContext
+  );
 
   // Connect beat sync to audio element when enabled
   React.useEffect(() => {
@@ -402,7 +408,9 @@ export default function App() {
     }
 
     const type = presetId.includes('lofi') ? 'lofi' : 'synthwave';
-    const audioUrl = preset.audioUrl || (presetId === 'cinematic-journey' ? `${baseUrl}aama.wav` : createSynthesizedAudioUrl(type));
+    const audioUrl = preset.audioUrl 
+      ? (preset.audioUrl.startsWith('http') ? preset.audioUrl : `${baseUrl}${preset.audioUrl.replace(/^\.\//, '')}`)
+      : createSynthesizedAudioUrl(type);
     setAudioUrl(audioUrl);
     setCustomAudioName(preset.title);
     localStorage.setItem('omlila_saved_audio_name', preset.title);
