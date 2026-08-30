@@ -327,52 +327,36 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
     };
   };
 
-  // Continuous high-performance 60fps render loop
+  // Clean, synchronized 60fps render execution
   useEffect(() => {
-    let animFrameId: number;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-    const render = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+    const { media, mediaTransform, nextMedia, nextMediaTransform, transitionProgress, transitionType } = getActiveSequenceMedia();
 
-      const { media, mediaTransform, nextMedia, nextMediaTransform, transitionProgress, transitionType } = getActiveSequenceMedia();
+    // Attach beat strength and watermark as side-channel properties on ctx for renderer access
+    (ctx as any)._beatStrength = beatStrength;
+    (ctx as any)._bpm = bpm;
+    if (watermarkImg) (ctx as any)._watermarkImg = watermarkImg;
 
-      // Attach beat strength and watermark as side-channel properties on ctx for renderer access
-      (ctx as any)._beatStrength = beatStrength;
-      (ctx as any)._bpm = bpm;
-      if (watermarkImg) (ctx as any)._watermarkImg = watermarkImg;
-
-      renderLyricFrame(
-        ctx,
-        targetDim.width,
-        targetDim.height,
-        lyrics,
-        currentTime,
-        duration,
-        style,
-        media,
-        nextMedia,
-        transitionProgress,
-        mediaTransform,
-        nextMediaTransform,
-        transitionType
-      );
-
-      if (isPlaying) {
-        animFrameId = requestAnimationFrame(render);
-      }
-    };
-
-    render();
-
-    return () => {
-      if (animFrameId) {
-        cancelAnimationFrame(animFrameId);
-      }
-    };
+    renderLyricFrame(
+      ctx,
+      targetDim.width,
+      targetDim.height,
+      lyrics,
+      currentTime,
+      duration,
+      style,
+      media,
+      nextMedia,
+      transitionProgress,
+      mediaTransform,
+      nextMediaTransform,
+      transitionType
+    );
   }, [lyrics, currentTime, duration, isPlaying, style, aspectRatio, targetDim, bgLoaded, mediaItems, beatStrength, bpm, watermarkImg]);
 
   const [dragMode, setDragMode] = useState<'text' | 'background'>('text');

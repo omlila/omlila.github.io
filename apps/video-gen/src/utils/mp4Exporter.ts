@@ -89,12 +89,21 @@ async function preloadMediaSequence(items: MediaSequenceItem[]): Promise<Map<str
         if (!item.url.startsWith('blob:') && !item.url.startsWith('data:')) {
           video.crossOrigin = 'anonymous';
         }
-        video.src = item.url;
+        video.preload = 'auto';
         video.muted = true;
         video.playsInline = true;
-        video.onloadeddata = () => {
+        video.src = item.url;
+        
+        const onReady = () => {
           loadedMap.set(item.id, video);
           resolve();
+        };
+
+        video.onloadeddata = () => {
+          try {
+            video.currentTime = Math.max(0.001, item.trimStartSec ?? 0.001);
+          } catch { /* ignore */ }
+          onReady();
         };
         video.onerror = () => resolve();
       }
@@ -121,29 +130,34 @@ async function loadAudioBuffer(audioUrl: string): Promise<AudioBuffer | null> {
 
 function seekVideoToTime(video: HTMLVideoElement, targetTime: number): Promise<void> {
   return new Promise<void>((resolve) => {
-    if (Math.abs(video.currentTime - targetTime) < 0.02) {
+    if (Math.abs(video.currentTime - targetTime) < 0.001) {
       return resolve();
     }
+
     let handled = false;
-    const onSeeked = () => {
-      if (handled) return;
-      handled = true;
-      video.removeEventListener('seeked', onSeeked);
-      resolve();
-    };
-    video.addEventListener('seeked', onSeeked, { once: true });
-    try {
-      video.currentTime = targetTime;
-    } catch {
-      resolve();
-    }
-    setTimeout(() => {
+    const cleanup = () => {
       if (!handled) {
         handled = true;
         video.removeEventListener('seeked', onSeeked);
         resolve();
       }
-    }, 45);
+    };
+
+    const onSeeked = () => {
+      cleanup();
+    };
+
+    video.addEventListener('seeked', onSeeked, { once: true });
+
+    try {
+      const maxTime = Math.max(0, (video.duration && !isNaN(video.duration)) ? video.duration - 0.001 : 1000);
+      video.currentTime = Math.max(0, Math.min(maxTime, targetTime));
+    } catch {
+      cleanup();
+    }
+
+    // Sufficient timeout to ensure decoder finishes intra-frame decode without dropping frames
+    setTimeout(cleanup, 350);
   });
 }
 
@@ -396,14 +410,19 @@ export async function exportLyricalVideoMP4(
         }
 
         // Frame-accurate video seeking
+        const seekTasks: Promise<void>[] = [];
         if (activeFrameBg instanceof HTMLVideoElement && activeFrameBg.duration > 0) {
           const targetTime = calculateVideoTime(activeItemObj, sceneInfo.timeInScene, activeFrameBg.duration);
-          await seekVideoToTime(activeFrameBg, targetTime);
+          seekTasks.push(seekVideoToTime(activeFrameBg, targetTime));
         }
 
         if (nextFrameBg instanceof HTMLVideoElement && nextFrameBg.duration > 0 && nextItemObj) {
           const nextTargetTime = calculateVideoTime(nextItemObj, transitionProgress * (nextItemObj.transitionDurationSec ?? 0.8), nextFrameBg.duration);
-          await seekVideoToTime(nextFrameBg, nextTargetTime);
+          seekTasks.push(seekVideoToTime(nextFrameBg, nextTargetTime));
+        }
+
+        if (seekTasks.length > 0) {
+          await Promise.all(seekTasks);
         }
       }
 

@@ -83,8 +83,8 @@ export function renderLyricFrame(
       scale *= kbZoom;
     }
 
-    const drawWidth = mediaWidth * scale;
-    const drawHeight = mediaHeight * scale;
+    const drawWidth = Math.round(mediaWidth * scale);
+    const drawHeight = Math.round(mediaHeight * scale);
     
     let offsetX = (width - drawWidth) / 2 + (width * ((transformToUse?.offsetXPercent ?? 0) / 100));
     let offsetY = (height - drawHeight) / 2 + (height * ((transformToUse?.offsetYPercent ?? 0) / 100));
@@ -106,9 +106,14 @@ export function renderLyricFrame(
       }
     }
 
+    const finalX = Math.round(offsetX);
+    const finalY = Math.round(offsetY);
+
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(media, offsetX, offsetY, drawWidth, drawHeight);
+    try {
+      ctx.drawImage(media, finalX, finalY, drawWidth, drawHeight);
+    } catch { /* video element seeking frame safety */ }
     ctx.restore();
   };
 
