@@ -95,6 +95,9 @@ export type TextStyleAnimation =
 
 export type VisualThemePreset =
   | 'clean-subtitle'
+  | 'documentary-cinema'
+  | 'poetic-gold'
+  | 'karaoke-pro'
   | 'mother-love'
   | 'cartoon'
   | 'cyberpunk'

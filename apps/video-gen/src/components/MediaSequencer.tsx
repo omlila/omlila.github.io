@@ -204,6 +204,17 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
     onUpdateMediaItems(mediaItems.map((item) => ({ ...item, durationSec: equalDuration })));
   };
 
+  const applyTransitionToAllScenes = (transType: SceneTransitionType) => {
+    onUpdateMediaItems(mediaItems.map(it => ({ ...it, transitionType: transType })));
+    if (onStyleChange && style) {
+      onStyleChange({ ...style, sequenceTransitionType: transType });
+    }
+  };
+
+  const applyMotionToAllVideos = (direction: 'forward' | 'reverse' | 'ping-pong' | 'freeze-frame') => {
+    onUpdateMediaItems(mediaItems.map(it => it.type === 'video' ? { ...it, playbackDirection: direction } : it));
+  };
+
   const totalMediaDuration = mediaItems.reduce((acc, item) => acc + item.durationSec, 0);
 
   return (
@@ -247,41 +258,69 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
           Upload video backgrounds or photos. Reuse the same video across multiple scenes with custom <strong>In/Out Timestamps</strong>, <strong>⏩ Forward</strong>, <strong>⏪ Reverse</strong>, and <strong>🪃 Boomerang</strong> motion, or click <strong>"End Here ✂️"</strong> during audio playback to lock scene boundaries.
         </p>
 
-        {/* Global Scene Transition Toolbar */}
+        {/* Global Scene Transition & Motion Toolbar */}
         {style && onStyleChange && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[var(--md-sys-color-surface-container-highest)] p-3 rounded-lg border border-[var(--md-sys-color-outline-variant)]">
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-[var(--md-sys-color-primary)] shrink-0" aria-hidden="true" />
-              <label htmlFor="global-transition-type" className="text-xs font-bold text-[var(--md-sys-color-on-surface)] shrink-0">
-                Scene Transition:
-              </label>
-              <select
-                id="global-transition-type"
-                value={style.sequenceTransitionType || 'crossfade'}
-                onChange={(e) => onStyleChange({ ...style, sequenceTransitionType: e.target.value as SceneTransitionType })}
-                className="flex-1 bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-2 py-1 text-xs font-bold rounded-lg cursor-pointer focus:outline-none"
-              >
-                <option value="crossfade">✨ Crossfade Dissolve</option>
-                <option value="fade-black">🌑 Fade to Black</option>
-                <option value="blur-dissolve">🌫️ Blur Dissolve</option>
-                <option value="instant-cut">⚡ Instant Cut</option>
-              </select>
+          <div className="space-y-2 bg-[var(--md-sys-color-surface-container-highest)] p-3 rounded-lg border border-[var(--md-sys-color-outline-variant)]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-[var(--md-sys-color-primary)] shrink-0" aria-hidden="true" />
+                <label htmlFor="global-transition-type" className="text-xs font-bold text-[var(--md-sys-color-on-surface)] shrink-0">
+                  Scene Transition:
+                </label>
+                <select
+                  id="global-transition-type"
+                  value={style.sequenceTransitionType || 'crossfade'}
+                  onChange={(e) => applyTransitionToAllScenes(e.target.value as SceneTransitionType)}
+                  className="flex-1 bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-2 py-1 text-xs font-bold rounded-lg cursor-pointer focus:outline-none"
+                >
+                  <option value="crossfade">✨ Crossfade Dissolve</option>
+                  <option value="fade-black">🌑 Fade to Black</option>
+                  <option value="blur-dissolve">🌫️ Blur Dissolve</option>
+                  <option value="instant-cut">⚡ Instant Cut</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] shrink-0">Duration:</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="3.0"
+                  step="0.25"
+                  value={style.sequenceTransitionDuration ?? style.sequenceCrossfadeDuration ?? 0.8}
+                  onChange={(e) => onStyleChange({ ...style, sequenceTransitionDuration: Number(e.target.value), sequenceCrossfadeDuration: Number(e.target.value) })}
+                  className="w-full accent-[var(--md-sys-color-primary)]"
+                />
+                <span className="text-xs font-mono font-bold text-[var(--md-sys-color-primary)] w-10 text-right tabular-nums">
+                  {(style.sequenceTransitionDuration ?? style.sequenceCrossfadeDuration ?? 0.8).toFixed(2)}s
+                </span>
+              </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] shrink-0">Duration:</span>
-              <input
-                type="range"
-                min="0"
-                max="3.0"
-                step="0.25"
-                value={style.sequenceTransitionDuration ?? style.sequenceCrossfadeDuration ?? 0.8}
-                onChange={(e) => onStyleChange({ ...style, sequenceTransitionDuration: Number(e.target.value), sequenceCrossfadeDuration: Number(e.target.value) })}
-                className="w-full accent-[var(--md-sys-color-primary)]"
-              />
-              <span className="text-xs font-mono font-bold text-[var(--md-sys-color-primary)] w-10 text-right tabular-nums">
-                {(style.sequenceTransitionDuration ?? style.sequenceCrossfadeDuration ?? 0.8).toFixed(2)}s
-              </span>
+            {/* Quick batch direction actions */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)]/40 text-xs">
+              <span className="text-[11px] font-bold text-[var(--md-sys-color-on-surface-variant)]">Batch Motion:</span>
+              <button
+                type="button"
+                onClick={() => applyMotionToAllVideos('forward')}
+                className="px-2 py-0.5 rounded bg-[var(--md-sys-color-surface-container)] hover:bg-[var(--md-sys-color-surface-container-high)] text-[11px] font-bold border border-[var(--md-sys-color-outline-variant)] cursor-pointer"
+              >
+                ⏩ All Forward
+              </button>
+              <button
+                type="button"
+                onClick={() => applyMotionToAllVideos('ping-pong')}
+                className="px-2 py-0.5 rounded bg-[var(--md-sys-color-surface-container)] hover:bg-[var(--md-sys-color-surface-container-high)] text-[11px] font-bold border border-[var(--md-sys-color-outline-variant)] cursor-pointer"
+              >
+                🪃 All Boomerang
+              </button>
+              <button
+                type="button"
+                onClick={() => applyMotionToAllVideos('reverse')}
+                className="px-2 py-0.5 rounded bg-[var(--md-sys-color-surface-container)] hover:bg-[var(--md-sys-color-surface-container-high)] text-[11px] font-bold border border-[var(--md-sys-color-outline-variant)] cursor-pointer"
+              >
+                ⏪ All Reverse
+              </button>
             </div>
           </div>
         )}
