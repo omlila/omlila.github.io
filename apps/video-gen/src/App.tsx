@@ -220,6 +220,11 @@ export default function App() {
     stage: 'idle',
   });
 
+  const beatSync = useBeatSync(
+    styleConfig.enableBeatSync ?? false,
+    styleConfig.beatSyncSensitivity ?? 1.0
+  );
+
   const {
     isPlaying,
     currentTime,
@@ -232,15 +237,13 @@ export default function App() {
     setAudioUrl,
     audioUrl,
     audioRef,
-  } = useLyricAudioSync(lyrics, initialPreset.audioUrl || `${baseUrl}aama.wav`);
-
-  const beatSync = useBeatSync(
-    styleConfig.enableBeatSync ?? false,
-    styleConfig.beatSyncSensitivity ?? 1.0
-  );
+  } = useLyricAudioSync(lyrics, initialPreset.audioUrl || `${baseUrl}aama.wav`, beatSync.resumeAudioContext);
 
   // Connect beat sync to audio element when enabled
   React.useEffect(() => {
+    if (audioRef.current) {
+      (window as any).omlilaAudioElement = audioRef.current;
+    }
     if (styleConfig.enableBeatSync && audioRef.current) {
       beatSync.connectToAudio(audioRef.current);
     } else if (!styleConfig.enableBeatSync) {

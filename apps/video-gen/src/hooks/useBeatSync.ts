@@ -41,6 +41,23 @@ export function useBeatSync(enabled: boolean, sensitivity: number = 1.0): BeatSy
     }
   }, []);
 
+  // Global user interaction listener to unlock AudioContext immediately
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      resumeAudioContext();
+    };
+
+    window.addEventListener('click', handleFirstInteraction, { passive: true });
+    window.addEventListener('keydown', handleFirstInteraction, { passive: true });
+    window.addEventListener('touchstart', handleFirstInteraction, { passive: true });
+
+    return () => {
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+    };
+  }, [resumeAudioContext]);
+
   const analyseFrame = useCallback(() => {
     if (!analyserRef.current || !enabled) return;
 

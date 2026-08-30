@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { LyricLine } from '../types';
 
-export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string) {
+export function useLyricAudioSync(
+  lyrics: LyricLine[],
+  initialAudioUrl?: string,
+  onResumeAudio?: () => Promise<void> | void
+) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -151,6 +155,9 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
   }, [currentTime, lyrics]);
 
   const play = useCallback(async () => {
+    if (onResumeAudio) {
+      try { await onResumeAudio(); } catch {}
+    }
     setIsPlaying(true);
     if (audioRef.current && audioUrl) {
       try {
@@ -162,7 +169,7 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
         console.warn('Audio play notice (clock fallback active):', err);
       }
     }
-  }, [audioUrl, effectiveDuration]);
+  }, [audioUrl, effectiveDuration, onResumeAudio]);
 
   const pause = useCallback(() => {
     setIsPlaying(false);
