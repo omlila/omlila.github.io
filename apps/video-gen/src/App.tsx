@@ -255,42 +255,53 @@ export default function App() {
 
   // Restore blob URLs from IndexedDB on mount
   useEffect(() => {
+    let isMounted = true;
+
     const restoreBlobs = async () => {
-      let needsMediaUpdate = false;
-      const restoredItems = await Promise.all(mediaItems.map(async (item, idx) => {
-        if (item.url && item.url.startsWith('blob:')) {
-          try {
-            const file = await getMediaFile(item.id);
-            if (file) {
-              needsMediaUpdate = true;
-              return { ...item, url: URL.createObjectURL(file) };
+      try {
+        const saved = localStorage.getItem('omlila_saved_mediaItems');
+        const itemsToRestore: MediaSequenceItem[] = saved ? JSON.parse(saved) : mediaItems;
+        
+        if (Array.isArray(itemsToRestore) && itemsToRestore.length > 0) {
+          const restored = await Promise.all(itemsToRestore.map(async (item, idx) => {
+            try {
+              const file = await getMediaFile(item.id);
+              if (file && file.size > 0) {
+                return { ...item, url: URL.createObjectURL(file) };
+              }
+            } catch (e) {}
+
+            if (item.url && !item.url.startsWith('blob:')) {
+              return item;
             }
-          } catch (e) {}
-          // Dead blob URL not found in IndexedDB - fallback to safe static asset
-          needsMediaUpdate = true;
-          const fallbackUrl = defaultMediaItems[idx % defaultMediaItems.length]?.url || `${baseUrl}mother_golden.jpg`;
-          return { ...item, url: fallbackUrl };
+
+            const fallbackUrl = defaultMediaItems[idx % defaultMediaItems.length]?.url || `${baseUrl}mother_golden.jpg`;
+            return { ...item, url: fallbackUrl };
+          }));
+
+          if (isMounted) {
+            setMediaItems(restored);
+          }
         }
-        return item;
-      }));
-      
-      if (needsMediaUpdate) {
-        setMediaItems(restoredItems);
+      } catch (e) {
+        console.warn('Could not restore media items from IndexedDB:', e);
       }
 
       try {
         const savedAudio = await getAudioFile();
-        if (savedAudio && savedAudio.size > 0) {
+        if (savedAudio && savedAudio.size > 0 && isMounted) {
           setAudioUrl(URL.createObjectURL(savedAudio));
-        } else {
-          setAudioUrl(`${baseUrl}aama.wav`);
         }
       } catch (e) {
-        setAudioUrl(`${baseUrl}aama.wav`);
+        console.warn('Could not restore audio file from IndexedDB:', e);
       }
     };
     
     restoreBlobs();
+
+    return () => {
+      isMounted = false;
+    };
   }, []); // Run once on mount
 
   useEffect(() => {

@@ -20,7 +20,6 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
   useEffect(() => {
     if (!audioRef.current) {
       const audio = new Audio();
-      audio.crossOrigin = 'anonymous';
       audio.preload = 'auto';
       audioRef.current = audio;
     }
@@ -44,25 +43,35 @@ export function useLyricAudioSync(lyrics: LyricLine[], initialAudioUrl?: string)
         setIsPlaying(false);
       }
     };
+    const handleError = (e: Event) => {
+      console.warn('Audio element playback error, falling back to timeline timer:', e);
+    };
 
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
+    audio.addEventListener('error', handleError);
 
     return () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
+      audio.removeEventListener('error', handleError);
     };
   }, [effectiveDuration]);
 
   useEffect(() => {
     if (audioRef.current && audioUrl) {
-      audioRef.current.crossOrigin = 'anonymous';
-      audioRef.current.src = audioUrl;
-      audioRef.current.load();
+      const audio = audioRef.current;
+      if (audioUrl.startsWith('blob:') || audioUrl.startsWith('data:')) {
+        audio.removeAttribute('crossOrigin');
+      } else {
+        audio.crossOrigin = 'anonymous';
+      }
+      audio.src = audioUrl;
+      audio.load();
       setCurrentTime(0);
       setIsPlaying(false);
     }
