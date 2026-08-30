@@ -170,7 +170,8 @@ export function autoContiguousSlice(
   return {
     ...previousItem,
     id: 'scene_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-    name: previousItem.name.replace(/ ((Continuation|Reverse|Boomerang|Freeze|Scene d+))/, '') + ' (' + (labelMap[nextDirection] || 'Next') + ')',
+    sourceVideoId: previousItem.sourceVideoId || previousItem.id,
+    name: previousItem.name.replace(/ \((Continuation|Reverse|Boomerang|Freeze|Scene \d+|Copy)\)/g, '') + ' (' + (labelMap[nextDirection] || 'Next') + ')',
     trimStartSec: nextTrimStart,
     trimEndSec: undefined,
     durationSec: Math.max(0.5, Number(sceneDurationSec.toFixed(1))),

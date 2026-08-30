@@ -291,7 +291,7 @@ export default function App() {
         if (Array.isArray(itemsToRestore) && itemsToRestore.length > 0) {
           const restored = await Promise.all(itemsToRestore.map(async (item, idx) => {
             try {
-              const file = await getMediaFile(item.id);
+              const file = await getMediaFile(item.sourceVideoId || item.id);
               if (file && file.size > 0) {
                 return { ...item, url: URL.createObjectURL(file) };
               }

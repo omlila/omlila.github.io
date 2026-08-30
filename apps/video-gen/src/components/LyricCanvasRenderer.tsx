@@ -46,12 +46,23 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
 
   const targetDim = ASPECT_RATIOS[aspectRatio] || ASPECT_RATIOS['9:16'];
 
-  // Preload sequence images
+  // Preload sequence images and videos with instant cache population
   useEffect(() => {
     if (!mediaItems || mediaItems.length === 0) return;
 
     mediaItems.forEach((item) => {
       if (loadedMediaCache.current.has(item.id)) return;
+
+      // Share already-loaded media element if same URL or sourceVideoId exists
+      if (item.url) {
+        for (const [existingId, m] of loadedMediaCache.current.entries()) {
+          const existing = mediaItems.find(it => it.id === existingId);
+          if (existing?.url === item.url || (m as any).src === item.url) {
+            loadedMediaCache.current.set(item.id, m);
+            return;
+          }
+        }
+      }
 
       if (item.type === 'image') {
         const img = new Image();
@@ -59,12 +70,13 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
           img.crossOrigin = 'anonymous';
         }
         img.src = item.url;
+        loadedMediaCache.current.set(item.id, img);
         img.onload = () => {
-          loadedMediaCache.current.set(item.id, img);
           setBgLoaded(Date.now());
         };
       } else {
         const video = document.createElement('video');
+        video.preload = 'auto';
         if (!item.url.startsWith('blob:')) {
           video.crossOrigin = 'anonymous';
         }
@@ -72,13 +84,50 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
         video.loop = true;
         video.muted = true;
         video.playsInline = true;
+        loadedMediaCache.current.set(item.id, video);
         video.onloadeddata = () => {
-          loadedMediaCache.current.set(item.id, video);
           setBgLoaded(Date.now());
         };
+        video.load();
       }
     });
   }, [mediaItems]);
+
+  // Fail-safe media element resolver (never returns null for valid items)
+  const getMediaElement = (item: MediaSequenceItem | undefined): HTMLImageElement | HTMLVideoElement | null => {
+    if (!item) return null;
+    const cached = loadedMediaCache.current.get(item.id);
+    if (cached) return cached;
+
+    if (item.url) {
+      for (const [id, el] of loadedMediaCache.current.entries()) {
+        const other = mediaItems.find(it => it.id === id);
+        if (other?.url === item.url || (el as any).src === item.url) {
+          loadedMediaCache.current.set(item.id, el);
+          return el;
+        }
+      }
+
+      if (item.type === 'video') {
+        const v = document.createElement('video');
+        v.preload = 'auto';
+        v.src = item.url;
+        v.loop = true;
+        v.muted = true;
+        v.playsInline = true;
+        loadedMediaCache.current.set(item.id, v);
+        v.load();
+        return v;
+      } else {
+        const img = new Image();
+        img.src = item.url;
+        loadedMediaCache.current.set(item.id, img);
+        return img;
+      }
+    }
+
+    return null;
+  };
 
   // Keep bg media element updated
   useEffect(() => {
@@ -125,7 +174,7 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
 
       if (sceneInfo) {
         const item = sceneInfo.activeItem;
-        const media = loadedMediaCache.current.get(item.id);
+        const media = getMediaElement(item);
         const mediaTransform = item.transform;
 
         // Sync video smoothly with direction, trimming, slow motion & time-stretching support
@@ -169,7 +218,7 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
 
         if (sceneInfo.isInTransition && sceneInfo.nextItem) {
           const nextItem = sceneInfo.nextItem;
-          nextMedia = loadedMediaCache.current.get(nextItem.id);
+          nextMedia = getMediaElement(nextItem);
           nextMediaTransform = nextItem.transform;
 
           if (nextMedia && nextMedia instanceof HTMLVideoElement && nextMedia.duration > 0) {

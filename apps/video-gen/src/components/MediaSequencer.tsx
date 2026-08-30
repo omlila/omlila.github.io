@@ -3,7 +3,7 @@ import type { MediaSequenceItem, SceneTransitionType, StyleConfig } from '../typ
 import { 
   Upload, Trash2, ArrowUp, ArrowDown, 
   Clock, Sparkles, Wand2, Layers, Scissors, 
-  Film, Copy, Eye
+  Film, Copy, Eye, Plus
 } from 'lucide-react';
 import { saveMediaFile, deleteMediaFile } from '../utils/mediaStore';
 import { autoContiguousSlice, calculateEffectivePlaybackRate } from '../utils/videoSequencerEngine';
@@ -28,6 +28,25 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
 }) => {
   const [activeTrimItem, setActiveTrimItem] = useState<MediaSequenceItem | null>(null);
 
+  // List of unique uploaded media sources so any scene can reuse any video/photo
+  const uniqueMediaSources = React.useMemo(() => {
+    const seen = new Set<string>();
+    const sources: { id: string; name: string; url: string; type: 'image' | 'video' }[] = [];
+    mediaItems.forEach(item => {
+      const key = item.sourceVideoId || item.url;
+      if (!seen.has(key) && item.url) {
+        seen.add(key);
+        sources.push({
+          id: item.sourceVideoId || item.id,
+          name: item.name.replace(/ \((Continuation|Reverse|Boomerang|Freeze|Scene \d+|Copy)\)/g, ''),
+          url: item.url,
+          type: item.type
+        });
+      }
+    });
+    return sources;
+  }, [mediaItems]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -49,6 +68,7 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
       
       newItems.push({
         id,
+        sourceVideoId: id,
         name: file.name,
         type: isVideo ? 'video' : 'image',
         url,
@@ -70,8 +90,13 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
   };
 
   const removeItem = async (id: string) => {
+    const itemToRemove = mediaItems.find(item => item.id === id);
     onUpdateMediaItems(mediaItems.filter((item) => item.id !== id));
-    await deleteMediaFile(id);
+    // Only delete file from idb if no other scene is using this source
+    const otherUses = mediaItems.filter(item => item.id !== id && (item.sourceVideoId === id || item.id === id));
+    if (otherUses.length === 0 && itemToRemove) {
+      await deleteMediaFile(itemToRemove.sourceVideoId || id);
+    }
   };
 
   const moveItem = (index: number, direction: 'up' | 'down') => {
@@ -97,6 +122,24 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
   ) => {
     const updated = [...mediaItems];
     updated[index] = { ...updated[index], [field]: value };
+    onUpdateMediaItems(updated);
+  };
+
+  // Switch which uploaded source media this scene uses
+  const switchSceneSource = (index: number, sourceId: string) => {
+    const source = uniqueMediaSources.find(s => s.id === sourceId);
+    if (!source) return;
+
+    const updated = [...mediaItems];
+    updated[index] = {
+      ...updated[index],
+      sourceVideoId: source.id,
+      name: `${source.name} (Scene ${index + 1})`,
+      url: source.url,
+      type: source.type,
+      trimStartSec: 0,
+      trimEndSec: undefined,
+    };
     onUpdateMediaItems(updated);
   };
 
@@ -130,6 +173,16 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
       const remainingAudio = audioDuration > currentTime ? Number((audioDuration - currentTime).toFixed(1)) : 5.0;
       const nextScene = autoContiguousSlice(updated[index], Math.max(1, remainingAudio), 'forward');
       updated.splice(index + 1, 0, nextScene);
+    } else {
+      // If photo, spawn next duplicate scene
+      const remainingAudio = audioDuration > currentTime ? Number((audioDuration - currentTime).toFixed(1)) : 5.0;
+      const nextScene: MediaSequenceItem = {
+        ...currentItem,
+        id: `media_${Date.now()}_scene`,
+        durationSec: Math.max(1, remainingAudio),
+        name: `${currentItem.name} (Scene ${index + 2})`
+      };
+      updated.splice(index + 1, 0, nextScene);
     }
 
     onUpdateMediaItems(updated);
@@ -156,7 +209,7 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
   return (
     <div className="space-y-4">
       {/* Upload Header Bar */}
-      <div className="md-surface-container p-4 sm:p-6 space-y-4">
+      <div className="md-surface-container p-4 sm:p-5 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm font-bold text-[var(--md-sys-color-primary)]">
             <Film className="w-5 h-5 text-[var(--md-sys-color-primary)] shrink-0" aria-hidden="true" />
@@ -191,7 +244,7 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
         </div>
 
         <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
-          Upload video backgrounds or photos. Set custom <strong>Start & Finish Times</strong>, expand into <strong>"⏩ Forward"</strong>, <strong>"⏪ Reverse"</strong>, and <strong>"🪃 Boomerang"</strong> scenes, or click <strong>"End Here ✂️"</strong> during audio playback to lock scene boundaries.
+          Upload video backgrounds or photos. Reuse the same video across multiple scenes with custom <strong>In/Out Timestamps</strong>, <strong>⏩ Forward</strong>, <strong>⏪ Reverse</strong>, and <strong>🪃 Boomerang</strong> motion, or click <strong>"End Here ✂️"</strong> during audio playback to lock scene boundaries.
         </p>
 
         {/* Global Scene Transition Toolbar */}
@@ -233,7 +286,7 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
           </div>
         )}
 
-        <div className="flex justify-between text-[11px] font-mono text-[var(--md-sys-color-on-surface-variant)] border-t border-[var(--md-sys-color-outline-variant)] pt-3 tabular-nums mt-3">
+        <div className="flex justify-between text-[11px] font-mono text-[var(--md-sys-color-on-surface-variant)] border-t border-[var(--md-sys-color-outline-variant)] pt-2.5 tabular-nums mt-2">
           <span>Scenes: {mediaItems.length}</span>
           <span>Timeline: {totalMediaDuration.toFixed(1)}s / Audio: {audioDuration.toFixed(1)}s</span>
         </div>
@@ -249,7 +302,7 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
           </p>
         </div>
       ) : (
-        <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+        <div className="space-y-3.5 max-h-[550px] overflow-y-auto pr-1">
           {mediaItems.map((item, index) => {
             const dir = item.playbackDirection || 'forward';
             const effectiveRate = calculateEffectivePlaybackRate(item, style?.videoPlaybackRate ?? 1.0);
@@ -257,11 +310,11 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
             return (
               <div
                 key={item.id}
-                className="md-surface-container p-3.5 rounded-xl border border-[var(--md-sys-color-outline-variant)] hover:border-[var(--md-sys-color-primary)] transition-all space-y-3 group"
+                className="md-surface-container p-4 rounded-xl border border-[var(--md-sys-color-outline-variant)] hover:border-[var(--md-sys-color-primary)] transition-all space-y-3 group shadow-sm"
               >
-                {/* Top Row: Info, Badges & Reorder Actions */}
+                {/* Top Row: Info, Media Source Switcher & Reorder Actions */}
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <span className="text-xs font-mono font-bold text-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-surface-container-highest)] px-2 py-0.5 rounded-md tabular-nums shrink-0">
                       Scene #{index + 1}
                     </span>
@@ -277,11 +330,31 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
                       </span>
                     </div>
 
-                    <div className="min-w-0">
-                      <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)] truncate block max-w-[200px]" title={item.name}>
-                        {item.name}
-                      </span>
-                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                    <div className="min-w-0 flex-1">
+                      {/* Media Source Dropdown (allows picking which uploaded video/photo this scene uses) */}
+                      {uniqueMediaSources.length > 1 ? (
+                        <div className="flex items-center gap-1.5">
+                          <label htmlFor={`source-select-${item.id}`} className="sr-only">Source Media</label>
+                          <select
+                            id={`source-select-${item.id}`}
+                            value={item.sourceVideoId || item.id}
+                            onChange={(e) => switchSceneSource(index, e.target.value)}
+                            className="bg-[var(--md-sys-color-surface-container-highest)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] text-xs font-bold px-2 py-0.5 rounded-lg focus:outline-none truncate max-w-[220px]"
+                          >
+                            {uniqueMediaSources.map(s => (
+                              <option key={s.id} value={s.id}>
+                                {s.type === 'video' ? '🎬' : '🖼️'} {s.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)] truncate block max-w-[220px]" title={item.name}>
+                          {item.name}
+                        </span>
+                      )}
+
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
                         {item.type === 'video' && (
                           <>
                             <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${
@@ -340,10 +413,10 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
 
                 {/* Video In/Out Trimming Row (For Video Clips) */}
                 {item.type === 'video' && (
-                  <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-[var(--md-sys-color-surface-container-highest)] rounded-lg border border-[var(--md-sys-color-outline-variant)]/60 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-[var(--md-sys-color-surface-container-highest)] rounded-lg border border-[var(--md-sys-color-outline-variant)]/60 text-xs">
                     <div className="flex flex-wrap items-center gap-3">
                       {/* Start Time (In-Point) */}
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1">
                         <label htmlFor={`trim-start-${item.id}`} className="text-[11px] font-bold text-[var(--md-sys-color-primary)]">
                           Start (In):
                         </label>
@@ -356,11 +429,26 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
                           onChange={(e) => updateItemField(index, 'trimStartSec', Math.max(0, Number(e.target.value)))}
                           className="w-14 bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-1.5 py-0.5 text-xs font-mono font-bold rounded focus:outline-none"
                         />
-                        <span className="text-[10px] text-zinc-400 font-mono">s</span>
+                        <button
+                          type="button"
+                          onClick={() => updateItemField(index, 'trimStartSec', Math.max(0, Number(((item.trimStartSec ?? 0) - 1).toFixed(1))))}
+                          className="text-[10px] font-mono px-1 py-0.5 bg-[var(--md-sys-color-surface-container)] rounded border border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]"
+                          title="-1s"
+                        >
+                          -1s
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateItemField(index, 'trimStartSec', Number(((item.trimStartSec ?? 0) + 1).toFixed(1)))}
+                          className="text-[10px] font-mono px-1 py-0.5 bg-[var(--md-sys-color-surface-container)] rounded border border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]"
+                          title="+1s"
+                        >
+                          +1s
+                        </button>
                       </div>
 
                       {/* Finish Time (Out-Point) */}
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1">
                         <label htmlFor={`trim-end-${item.id}`} className="text-[11px] font-bold text-amber-400">
                           Finish (Out):
                         </label>
@@ -374,7 +462,28 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
                           onChange={(e) => updateItemField(index, 'trimEndSec', e.target.value ? Number(e.target.value) : undefined)}
                           className="w-14 bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-1.5 py-0.5 text-xs font-mono font-bold rounded focus:outline-none placeholder:text-zinc-500"
                         />
-                        <span className="text-[10px] text-zinc-400 font-mono">s</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const curEnd = item.trimEndSec || (item.trimStartSec ?? 0) + 5.0;
+                            updateItemField(index, 'trimEndSec', Math.max((item.trimStartSec ?? 0) + 0.1, Number((curEnd - 1).toFixed(1))));
+                          }}
+                          className="text-[10px] font-mono px-1 py-0.5 bg-[var(--md-sys-color-surface-container)] rounded border border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]"
+                          title="-1s"
+                        >
+                          -1s
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const curEnd = item.trimEndSec || (item.trimStartSec ?? 0) + 5.0;
+                            updateItemField(index, 'trimEndSec', Number((curEnd + 1).toFixed(1)));
+                          }}
+                          className="text-[10px] font-mono px-1 py-0.5 bg-[var(--md-sys-color-surface-container)] rounded border border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]"
+                          title="+1s"
+                        >
+                          +1s
+                        </button>
                       </div>
                     </div>
 
@@ -383,10 +492,10 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
                       type="button"
                       onClick={() => setActiveTrimItem(item)}
                       title="Open visual video scrubber and frame trimmer"
-                      className="md-button-tonal !py-1 !px-2.5 text-xs font-bold flex items-center gap-1.5 text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-primary-container)]"
+                      className="md-button-filled !py-1 !px-2.5 text-xs font-bold flex items-center gap-1.5 shadow-sm"
                     >
                       <Eye className="w-3.5 h-3.5" />
-                      <span>Visual Trim & Scrubber ✂️</span>
+                      <span>Trim & Scrubber ✂️</span>
                     </button>
                   </div>
                 )}
@@ -466,10 +575,11 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
                         title="Spawn next contiguous section from this video"
                         className="md-button-tonal !py-1 !px-2 text-xs font-bold flex items-center gap-1 rounded-lg text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-primary-container)]"
                       >
-                        <span>+ Cont.</span>
+                        <Plus className="w-3 h-3" />
+                        <span>Cont.</span>
                       </button>
 
-                      {/* Quick Boomerang Button */}
+                      {/* Quick Reverse Button */}
                       <button
                         type="button"
                         onClick={() => expandVideoScene(index, 'reverse')}
@@ -477,6 +587,16 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
                         className="md-button-tonal !py-1 !px-2 text-xs font-bold flex items-center gap-1 rounded-lg text-purple-300 hover:bg-purple-900/30"
                       >
                         <span>⏪ Reverse</span>
+                      </button>
+
+                      {/* Quick Boomerang Button */}
+                      <button
+                        type="button"
+                        onClick={() => expandVideoScene(index, 'ping-pong')}
+                        title="Duplicate as a Boomerang loop section"
+                        className="md-button-tonal !py-1 !px-2 text-xs font-bold flex items-center gap-1 rounded-lg text-pink-300 hover:bg-pink-900/30"
+                      >
+                        <span>🪃 Boomerang</span>
                       </button>
                     </div>
                   ) : (
@@ -487,6 +607,7 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
                           const duplicated: MediaSequenceItem = {
                             ...item,
                             id: `media_${Date.now()}_dup`,
+                            sourceVideoId: item.sourceVideoId || item.id,
                             name: `${item.name} (Copy)`
                           };
                           const updated = [...mediaItems];
