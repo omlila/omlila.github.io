@@ -131,18 +131,18 @@ export function renderLyricFrame(
           drawMediaLayer(nextBgElement, fadeInAlpha, nextBgTransform);
         }
       } else if (activeTransType === 'blur-dissolve') {
-        // Smooth blur expansion during dissolve
-        const blurAmount = Math.sin(p * Math.PI) * 16;
+        // Smooth blur expansion during dissolve with zero-dip constant luminance
+        const blurAmount = Math.sin(p * Math.PI) * 14;
         ctx.save();
         if (blurAmount > 0.5) {
           ctx.filter = `blur(${blurAmount.toFixed(1)}px)`;
         }
-        drawMediaLayer(bgElement, 1 - p, bgTransform);
+        drawMediaLayer(bgElement, 1.0, bgTransform);
         drawMediaLayer(nextBgElement, p, nextBgTransform);
         ctx.restore();
       } else {
-        // Standard high-performance crossfade dissolve
-        drawMediaLayer(bgElement, 1 - p, bgTransform);
+        // Constant-Luminance Crossfade Dissolve (Zero Dark-Dip flicker)
+        drawMediaLayer(bgElement, 1.0, bgTransform);
         drawMediaLayer(nextBgElement, p, nextBgTransform);
       }
     } else {
