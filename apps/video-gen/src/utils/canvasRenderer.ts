@@ -1,4 +1,4 @@
-import type { LyricLine, MotionCurve, StyleConfig, BackgroundTransformConfig } from '../types';
+import type { LyricLine, MotionCurve, StyleConfig, BackgroundTransformConfig, SceneTransitionType } from '../types';
 
 /**
  * OpenReel-inspired Easing Functions for High-Quality Keyframe Animations.

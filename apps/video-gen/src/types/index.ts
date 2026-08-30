@@ -205,7 +205,6 @@ export interface StyleConfig {
   enableKenBurns?: boolean; // Zoom/Pan Ken Burns motion effect
   enableActiveLineBackground?: boolean; // Karaoke pill behind text
   enableProgressBar?: boolean; // Bottom progress bar
-  sequenceCrossfadeDuration?: number; // 0 to 5 seconds
 
   // Cinema Scrim & Feathered Background Fade (Half-Screen / Lower-Third Cover)
   enableScrimOverlay?: boolean; // Covers a portion of screen with a soft feathered dark gradient

@@ -113,11 +113,6 @@ export const LyricCanvasRenderer: React.FC<LyricCanvasRendererProps> = ({
     }
   }, [bgMediaUrl, mediaItems.length]);
 
-  const getTotalSequenceDuration = () => {
-    if (!mediaItems || mediaItems.length === 0) return 0;
-    return mediaItems.reduce((acc, item) => acc + (item.durationSec || 5), 0);
-  };
-
   // Determine active media element based on sequence timeline using robust engine
   const getActiveSequenceMedia = () => {
     if (mediaItems && mediaItems.length > 0) {

@@ -1,11 +1,13 @@
-import React from 'react';
-import type { MediaSequenceItem, StyleConfig } from '../types';
+import React, { useState } from 'react';
+import type { MediaSequenceItem, SceneTransitionType, StyleConfig } from '../types';
 import { 
   Upload, Trash2, ArrowUp, ArrowDown, 
   Clock, Sparkles, Wand2, Layers, Scissors, 
-  Film, Copy
+  Film, Copy, Eye
 } from 'lucide-react';
 import { saveMediaFile, deleteMediaFile } from '../utils/mediaStore';
+import { autoContiguousSlice, calculateEffectivePlaybackRate } from '../utils/videoSequencerEngine';
+import { VideoTrimModal } from './VideoTrimModal';
 
 interface MediaSequencerProps {
   mediaItems: MediaSequenceItem[];
@@ -24,6 +26,8 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
   onStyleChange,
   currentTime = 0,
 }) => {
+  const [activeTrimItem, setActiveTrimItem] = useState<MediaSequenceItem | null>(null);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -51,7 +55,7 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
         durationSec: equalDuration,
         trimStartSec: 0,
         playbackRate: 0.5,
-        videoTimeStretchMode: 'slow-motion',
+        videoTimeStretchMode: 'auto-fit-duration',
         playbackDirection: 'forward',
       });
     }
@@ -96,7 +100,14 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
     onUpdateMediaItems(updated);
   };
 
-  // 1-Click "End Here & Add Next Scene": Locks current clip's duration to song playback time and appends next video subsection
+  const handleSaveTrim = (updatedFields: Partial<MediaSequenceItem>) => {
+    if (!activeTrimItem) return;
+    onUpdateMediaItems(
+      mediaItems.map((item) => (item.id === activeTrimItem.id ? { ...item, ...updatedFields } : item))
+    );
+  };
+
+  // 1-Click "End Here ✂️": Locks current clip's duration to song playback time and appends next contiguous video subsection
   const handleEndHereAndSplit = (index: number) => {
     if (!currentTime || currentTime <= 0) return;
     
@@ -116,21 +127,8 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
 
     // If it's a video, automatically spawn the next contiguous scene from the same video
     if (currentItem.type === 'video') {
-      const speed = currentItem.playbackRate ?? 0.5;
-      const currentTrimStart = currentItem.trimStartSec ?? 0;
-      const nextTrimStart = Number((currentTrimStart + (currentClipDuration * speed)).toFixed(1));
-      
       const remainingAudio = audioDuration > currentTime ? Number((audioDuration - currentTime).toFixed(1)) : 5.0;
-
-      const nextScene: MediaSequenceItem = {
-        ...currentItem,
-        id: `media_${Date.now()}_scene`,
-        name: `${currentItem.name.replace(/ \(Scene \d+\)/, '')} (Scene ${index + 2})`,
-        trimStartSec: nextTrimStart,
-        durationSec: Math.max(1, remainingAudio),
-        playbackDirection: currentItem.playbackDirection || 'forward',
-      };
-
+      const nextScene = autoContiguousSlice(updated[index], Math.max(1, remainingAudio), 'forward');
       updated.splice(index + 1, 0, nextScene);
     }
 
@@ -140,25 +138,7 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
   // Add another scene subsection from the same video
   const expandVideoScene = (index: number, direction: 'forward' | 'reverse' | 'ping-pong' | 'freeze-frame' = 'forward') => {
     const item = mediaItems[index];
-    const speed = item.playbackRate ?? 0.5;
-    const currentTrimStart = item.trimStartSec ?? 0;
-    const nextTrimStart = direction === 'forward' ? Number((currentTrimStart + (item.durationSec * speed)).toFixed(1)) : currentTrimStart;
-
-    const labelMap: Record<string, string> = {
-      'forward': 'Next Scene',
-      'reverse': 'Reverse',
-      'ping-pong': 'Boomerang',
-      'freeze-frame': 'Freeze'
-    };
-
-    const nextScene: MediaSequenceItem = {
-      ...item,
-      id: `media_${Date.now()}_scene`,
-      name: `${item.name.replace(/ \((Next Scene|Reverse|Boomerang|Freeze|Scene \d+)\)/, '')} (${labelMap[direction]})`,
-      trimStartSec: nextTrimStart,
-      playbackDirection: direction,
-      durationSec: item.durationSec || 5.0,
-    };
+    const nextScene = autoContiguousSlice(item, item.durationSec || 5.0, direction);
 
     const updated = [...mediaItems];
     updated.splice(index + 1, 0, nextScene);
@@ -211,26 +191,44 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
         </div>
 
         <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
-          Upload video backgrounds or photos. Click <strong>"End Here ✂️"</strong> during audio playback to lock scene boundaries, or use <strong>"⏩ Forward"</strong>, <strong>"⏪ Reverse"</strong>, and <strong>"🪃 Boomerang"</strong> to create looping visuals.
+          Upload video backgrounds or photos. Set custom <strong>Start & Finish Times</strong>, expand into <strong>"⏩ Forward"</strong>, <strong>"⏪ Reverse"</strong>, and <strong>"🪃 Boomerang"</strong> scenes, or click <strong>"End Here ✂️"</strong> during audio playback to lock scene boundaries.
         </p>
 
+        {/* Global Scene Transition Toolbar */}
         {style && onStyleChange && (
-          <div className="flex items-center gap-4 bg-[var(--md-sys-color-surface-container-highest)] p-3 rounded-lg border border-[var(--md-sys-color-outline-variant)]">
-            <Layers className="w-5 h-5 text-[var(--md-sys-color-primary)]" aria-hidden="true" />
-            <div className="flex-1">
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">Transition Crossfade Duration</span>
-                <span className="text-xs font-mono font-bold text-[var(--md-sys-color-primary)]">{style.sequenceCrossfadeDuration ?? 1.0}s</span>
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[var(--md-sys-color-surface-container-highest)] p-3 rounded-lg border border-[var(--md-sys-color-outline-variant)]">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-[var(--md-sys-color-primary)] shrink-0" aria-hidden="true" />
+              <label htmlFor="global-transition-type" className="text-xs font-bold text-[var(--md-sys-color-on-surface)] shrink-0">
+                Scene Transition:
+              </label>
+              <select
+                id="global-transition-type"
+                value={style.sequenceTransitionType || 'crossfade'}
+                onChange={(e) => onStyleChange({ ...style, sequenceTransitionType: e.target.value as SceneTransitionType })}
+                className="flex-1 bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-2 py-1 text-xs font-bold rounded-lg cursor-pointer focus:outline-none"
+              >
+                <option value="crossfade">✨ Crossfade Dissolve</option>
+                <option value="fade-black">🌑 Fade to Black</option>
+                <option value="blur-dissolve">🌫️ Blur Dissolve</option>
+                <option value="instant-cut">⚡ Instant Cut</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] shrink-0">Duration:</span>
               <input
                 type="range"
                 min="0"
-                max="5"
-                step="0.5"
-                value={style.sequenceCrossfadeDuration ?? 1.0}
-                onChange={(e) => onStyleChange({ ...style, sequenceCrossfadeDuration: Number(e.target.value) })}
+                max="3.0"
+                step="0.25"
+                value={style.sequenceTransitionDuration ?? style.sequenceCrossfadeDuration ?? 0.8}
+                onChange={(e) => onStyleChange({ ...style, sequenceTransitionDuration: Number(e.target.value), sequenceCrossfadeDuration: Number(e.target.value) })}
                 className="w-full accent-[var(--md-sys-color-primary)]"
               />
+              <span className="text-xs font-mono font-bold text-[var(--md-sys-color-primary)] w-10 text-right tabular-nums">
+                {(style.sequenceTransitionDuration ?? style.sequenceCrossfadeDuration ?? 0.8).toFixed(2)}s
+              </span>
             </div>
           </div>
         )}
@@ -247,13 +245,14 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
           <Sparkles className="w-8 h-8 text-[var(--md-sys-color-primary)] mx-auto animate-pulse" aria-hidden="true" />
           <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">No Video Scenes Uploaded</h3>
           <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] max-w-xs mx-auto">
-            Upload videos or images to build your lyrical sequence. You can expand any video into forward, reverse, and boomerang scenes.
+            Upload videos or images to build your lyrical sequence. You can set in/out points, reverse motion, and apply smooth scene transitions.
           </p>
         </div>
       ) : (
-        <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+        <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
           {mediaItems.map((item, index) => {
             const dir = item.playbackDirection || 'forward';
+            const effectiveRate = calculateEffectivePlaybackRate(item, style?.videoPlaybackRate ?? 1.0);
 
             return (
               <div
@@ -263,7 +262,7 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
                 {/* Top Row: Info, Badges & Reorder Actions */}
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="text-xs font-mono font-bold text-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-surface-container-highest)] px-2 py-0.5 rounded-md tabular-nums">
+                    <span className="text-xs font-mono font-bold text-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-surface-container-highest)] px-2 py-0.5 rounded-md tabular-nums shrink-0">
                       Scene #{index + 1}
                     </span>
 
@@ -282,22 +281,23 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
                       <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)] truncate block max-w-[200px]" title={item.name}>
                         {item.name}
                       </span>
-                      <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                         {item.type === 'video' && (
-                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${
-                            dir === 'reverse' ? 'bg-amber-500/20 text-amber-300' :
-                            dir === 'ping-pong' ? 'bg-purple-500/20 text-purple-300' :
-                            dir === 'freeze-frame' ? 'bg-cyan-500/20 text-cyan-300' :
-                            'bg-emerald-500/20 text-emerald-300'
-                          }`}>
-                            {dir === 'reverse' ? '⏪ Reverse' : dir === 'ping-pong' ? '🪃 Boomerang' : dir === 'freeze-frame' ? '⏸️ Freeze' : '⏩ Forward'}
-                          </span>
+                          <>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${
+                              dir === 'reverse' ? 'bg-amber-500/20 text-amber-300' :
+                              dir === 'ping-pong' ? 'bg-purple-500/20 text-purple-300' :
+                              dir === 'freeze-frame' ? 'bg-cyan-500/20 text-cyan-300' :
+                              'bg-emerald-500/20 text-emerald-300'
+                            }`}>
+                              {dir === 'reverse' ? '⏪ Reverse' : dir === 'ping-pong' ? '🪃 Boomerang' : dir === 'freeze-frame' ? '⏸️ Freeze' : '⏩ Forward'}
+                            </span>
+
+                            <span className="text-[10px] text-zinc-400 font-mono bg-[var(--md-sys-color-surface-container-highest)] px-1.5 py-0.2 rounded">
+                              Speed: {effectiveRate}x
+                            </span>
+                          </>
                         )}
-                        {item.trimStartSec && item.trimStartSec > 0 ? (
-                          <span className="text-[10px] text-zinc-400 font-mono">
-                            Start: {item.trimStartSec.toFixed(1)}s
-                          </span>
-                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -338,9 +338,62 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
                   </div>
                 </div>
 
-                {/* Bottom Row: Controls & Quick Actions */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-[var(--md-sys-color-outline-variant)]/40 text-xs">
-                  {/* Left Controls: Duration & "End Here" */}
+                {/* Video In/Out Trimming Row (For Video Clips) */}
+                {item.type === 'video' && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-[var(--md-sys-color-surface-container-highest)] rounded-lg border border-[var(--md-sys-color-outline-variant)]/60 text-xs">
+                    <div className="flex flex-wrap items-center gap-3">
+                      {/* Start Time (In-Point) */}
+                      <div className="flex items-center gap-1.5">
+                        <label htmlFor={`trim-start-${item.id}`} className="text-[11px] font-bold text-[var(--md-sys-color-primary)]">
+                          Start (In):
+                        </label>
+                        <input
+                          id={`trim-start-${item.id}`}
+                          type="number"
+                          min={0}
+                          step={0.1}
+                          value={item.trimStartSec ?? 0}
+                          onChange={(e) => updateItemField(index, 'trimStartSec', Math.max(0, Number(e.target.value)))}
+                          className="w-14 bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-1.5 py-0.5 text-xs font-mono font-bold rounded focus:outline-none"
+                        />
+                        <span className="text-[10px] text-zinc-400 font-mono">s</span>
+                      </div>
+
+                      {/* Finish Time (Out-Point) */}
+                      <div className="flex items-center gap-1.5">
+                        <label htmlFor={`trim-end-${item.id}`} className="text-[11px] font-bold text-amber-400">
+                          Finish (Out):
+                        </label>
+                        <input
+                          id={`trim-end-${item.id}`}
+                          type="number"
+                          min={item.trimStartSec ?? 0}
+                          step={0.1}
+                          placeholder="End"
+                          value={item.trimEndSec ?? ''}
+                          onChange={(e) => updateItemField(index, 'trimEndSec', e.target.value ? Number(e.target.value) : undefined)}
+                          className="w-14 bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-1.5 py-0.5 text-xs font-mono font-bold rounded focus:outline-none placeholder:text-zinc-500"
+                        />
+                        <span className="text-[10px] text-zinc-400 font-mono">s</span>
+                      </div>
+                    </div>
+
+                    {/* Scrubber Modal Opener */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTrimItem(item)}
+                      title="Open visual video scrubber and frame trimmer"
+                      className="md-button-tonal !py-1 !px-2.5 text-xs font-bold flex items-center gap-1.5 text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-primary-container)]"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Visual Trim & Scrubber ✂️</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Bottom Row: Duration, Direction, Speed & Slicing */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 border-t border-[var(--md-sys-color-outline-variant)]/40 text-xs">
+                  {/* Left Controls: Scene Timeline Duration & "End Here" */}
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1 bg-[var(--md-sys-color-surface-container-highest)] px-2 py-1 rounded-lg border border-[var(--md-sys-color-outline-variant)]">
                       <Clock className="w-3.5 h-3.5 text-[var(--md-sys-color-primary)]" />
@@ -361,15 +414,15 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
                     <button
                       type="button"
                       onClick={() => handleEndHereAndSplit(index)}
-                      title="Set clip end time to current audio playback position and automatically add the next scene"
-                      className="md-button-filled !py-1 !px-2.5 text-xs font-bold flex items-center gap-1 bg-amber-600 hover:bg-amber-500 text-white shadow-sm"
+                      title="Lock current scene to audio time and spawn next contiguous scene"
+                      className="md-button-filled !py-1 !px-2.5 text-xs font-bold flex items-center gap-1 bg-amber-600 hover:bg-amber-500 text-white shadow-sm shrink-0"
                     >
                       <Scissors className="w-3.5 h-3.5" />
                       <span>End Here ✂️</span>
                     </button>
                   </div>
 
-                  {/* Right Controls (Video direction & expand actions) */}
+                  {/* Right Controls: Video Direction, Speed Presets, & Quick Expansion */}
                   {item.type === 'video' ? (
                     <div className="flex items-center gap-1.5 justify-start sm:justify-end flex-wrap">
                       {/* Direction Dropdown */}
@@ -380,7 +433,7 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
                       >
                         <option value="forward">⏩ Forward</option>
                         <option value="reverse">⏪ Reverse</option>
-                        <option value="ping-pong">🪃 Boomerang Loop</option>
+                        <option value="ping-pong">🪃 Boomerang</option>
                         <option value="freeze-frame">⏸️ Freeze Still</option>
                       </select>
 
@@ -399,31 +452,31 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
                         }}
                         className="bg-[var(--md-sys-color-surface-container-highest)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] px-1.5 py-1 text-xs font-mono rounded-lg cursor-pointer focus:outline-none"
                       >
-                        <option value="0.25">0.25x Slow</option>
-                        <option value="0.5">0.5x Smooth</option>
-                        <option value="0.75">0.75x</option>
+                        <option value="auto-fit-duration">Auto-Fit (Stretch)</option>
+                        <option value="0.25">0.25x Super Slow</option>
+                        <option value="0.5">0.5x Slow-Mo</option>
+                        <option value="0.75">0.75x Gentle</option>
                         <option value="1">1.0x Normal</option>
-                        <option value="auto-fit-duration">Auto-Fit</option>
                       </select>
 
-                      {/* Quick Expand Button */}
+                      {/* Quick Next Contiguous Scene Button */}
                       <button
                         type="button"
                         onClick={() => expandVideoScene(index, 'forward')}
-                        title="Add next scene from this video"
+                        title="Spawn next contiguous section from this video"
                         className="md-button-tonal !py-1 !px-2 text-xs font-bold flex items-center gap-1 rounded-lg text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-primary-container)]"
                       >
-                        <span>+ Add Scene</span>
+                        <span>+ Cont.</span>
                       </button>
 
                       {/* Quick Boomerang Button */}
                       <button
                         type="button"
                         onClick={() => expandVideoScene(index, 'reverse')}
-                        title="Duplicate as a Reverse scene"
+                        title="Duplicate as a Reverse section"
                         className="md-button-tonal !py-1 !px-2 text-xs font-bold flex items-center gap-1 rounded-lg text-purple-300 hover:bg-purple-900/30"
                       >
-                        <span>⏪ Reverse Clone</span>
+                        <span>⏪ Reverse</span>
                       </button>
                     </div>
                   ) : (
@@ -452,6 +505,16 @@ export const MediaSequencer: React.FC<MediaSequencerProps> = ({
             );
           })}
         </div>
+      )}
+
+      {/* Video Trimming Modal */}
+      {activeTrimItem && (
+        <VideoTrimModal
+          item={activeTrimItem}
+          isOpen={true}
+          onClose={() => setActiveTrimItem(null)}
+          onSave={handleSaveTrim}
+        />
       )}
     </div>
   );
