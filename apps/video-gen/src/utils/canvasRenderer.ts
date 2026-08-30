@@ -225,6 +225,58 @@ export function renderLyricFrame(
     ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.95, style.backgroundDarken)})`;
     ctx.fillRect(0, 0, width, height);
   }
+
+  // 4.5. Cinema Scrim & Feathered Background Fade (Half-Screen / Lower-Third Cover)
+  if (style.enableScrimOverlay) {
+    ctx.save();
+    const scrimType = style.scrimType || 'bottom-fade';
+    const heightPercent = (style.scrimHeightPercent ?? 50) / 100;
+    const scrimOpacity = Math.min(1.0, Math.max(0.0, style.scrimOpacity ?? 0.75));
+    const scrimColor = style.scrimColor || '#000000';
+    const featherRatio = (style.scrimFeatherPercent ?? 50) / 100;
+
+    let r = 0, g = 0, b = 0;
+    const hexMatch = scrimColor.match(/^#([0-9a-f]{6})$/i);
+    if (hexMatch) {
+      r = parseInt(hexMatch[1].substring(0, 2), 16);
+      g = parseInt(hexMatch[1].substring(2, 4), 16);
+      b = parseInt(hexMatch[1].substring(4, 6), 16);
+    }
+
+    if (scrimType === 'bottom-fade' || scrimType === 'horizontal-split') {
+      const scrimH = height * heightPercent;
+      const startY = height - scrimH;
+      
+      const grad = ctx.createLinearGradient(0, startY, 0, height);
+      grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
+      grad.addColorStop(Math.min(0.9, featherRatio), `rgba(${r},${g},${b},${scrimOpacity * 0.7})`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},${scrimOpacity})`);
+      
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, startY, width, scrimH);
+    } else if (scrimType === 'top-fade') {
+      const scrimH = height * heightPercent;
+      const grad = ctx.createLinearGradient(0, 0, 0, scrimH);
+      grad.addColorStop(0, `rgba(${r},${g},${b},${scrimOpacity})`);
+      grad.addColorStop(Math.min(0.9, featherRatio), `rgba(${r},${g},${b},${scrimOpacity * 0.7})`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, width, scrimH);
+    } else if (scrimType === 'center-band') {
+      const bandH = height * heightPercent;
+      const startY = (height - bandH) / 2;
+      const grad = ctx.createLinearGradient(0, startY, 0, startY + bandH);
+      grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
+      grad.addColorStop(0.3, `rgba(${r},${g},${b},${scrimOpacity})`);
+      grad.addColorStop(0.7, `rgba(${r},${g},${b},${scrimOpacity})`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, startY, width, bandH);
+    }
+    ctx.restore();
+  }
   
   if ((style.backgroundTintAmount || 0) > 0) {
     ctx.save();

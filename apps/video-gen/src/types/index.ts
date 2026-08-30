@@ -190,6 +190,14 @@ export interface StyleConfig {
   enableProgressBar?: boolean; // Bottom progress bar
   sequenceCrossfadeDuration?: number; // 0 to 5 seconds
 
+  // Cinema Scrim & Feathered Background Fade (Half-Screen / Lower-Third Cover)
+  enableScrimOverlay?: boolean; // Covers a portion of screen with a soft feathered dark gradient
+  scrimType?: 'bottom-fade' | 'top-fade' | 'center-band' | 'horizontal-split';
+  scrimHeightPercent?: number; // 20 to 100%, default 50% (half screen)
+  scrimOpacity?: number; // 0.0 to 1.0, default 0.75
+  scrimColor?: string; // default '#000000'
+  scrimFeatherPercent?: number; // 10 to 100% feather/blend softness, default 50%
+
   // Feature 1: Lyrics Text Wrapping Control
   lyricsMaxWidthPercent?: number; // 30 to 100, default 90 - max width as % of canvas
   lyricsWrapMode?: 'word' | 'char' | 'none'; // default 'word'

@@ -38,6 +38,7 @@ import {
   Focus,
   PanelBottom,
   LayoutList,
+  Layers,
 } from 'lucide-react';
 
 interface LyricStylingControlsProps {
@@ -213,6 +214,7 @@ export const LyricStylingControls: React.FC<LyricStylingControlsProps> = ({
 
         <div className="grid grid-cols-2 gap-3" role="group" aria-label="Visual Effects Overlays">
           {[
+            { key: 'enableScrimOverlay', label: 'Cinema Scrim Fade', icon: Layers, desc: 'Faded half-screen gradient' },
             { key: 'enableProgressBar', label: 'Progress Bar', icon: Activity, desc: 'Social media time bar' },
             { key: 'enableKenBurns', label: 'Ken Burns Motion', icon: Wand2, desc: 'Background zoom & pan' },
             { key: 'enableAudioSpectrum', label: 'Audio Spectrum', icon: Activity, desc: 'Moving audio bars' },
@@ -1284,6 +1286,140 @@ export const LyricStylingControls: React.FC<LyricStylingControlsProps> = ({
                     className="w-full accent-emerald-500 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer" />
                 </div>
               </div>
+            </div>
+
+            {/* Cinema Scrim & Feathered Background Fade (Cover Half/Portion of Screen) */}
+            <div className="md-surface-container p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-[var(--md-sys-color-primary)]">
+                  <Layers className="w-5 h-5 text-[var(--md-sys-color-primary)]" aria-hidden="true" />
+                  <div>
+                    <span>Cinema Scrim & Backdrop Fade</span>
+                    <span className="block text-xs font-normal text-[var(--md-sys-color-on-surface-variant)]">
+                      Faded half-screen gradient with soft feathered boundary
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updateStyle('enableScrimOverlay', !style.enableScrimOverlay)}
+                  aria-pressed={style.enableScrimOverlay}
+                  className={`py-1.5 px-4 rounded-xl border text-xs font-bold cursor-pointer transition-colors ${
+                    style.enableScrimOverlay
+                      ? 'bg-[var(--md-sys-color-primary-container)] border-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary-container)] shadow-[var(--md-sys-elevation-1)]'
+                      : 'bg-[var(--md-sys-color-surface-container-highest)] border-transparent text-[var(--md-sys-color-on-surface-variant)]'
+                  }`}
+                >
+                  {style.enableScrimOverlay ? 'Enabled' : 'Disabled'}
+                </button>
+              </div>
+
+              {style.enableScrimOverlay && (
+                <div className="space-y-4 pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
+                  {/* Scrim Position Type */}
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--md-sys-color-on-surface)] mb-2">
+                      Fade Coverage Area
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'bottom-fade', label: 'Bottom Half (Lower Third)', desc: 'Fades from bottom up' },
+                        { id: 'top-fade', label: 'Top Half', desc: 'Fades from top down' },
+                        { id: 'center-band', label: 'Center Band', desc: 'Soft band behind lyrics' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => updateStyle('scrimType', item.id as any)}
+                          className={`p-2 rounded-xl border text-left cursor-pointer transition-colors ${
+                            (style.scrimType || 'bottom-fade') === item.id
+                              ? 'bg-[var(--md-sys-color-primary-container)] border-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary-container)] font-bold'
+                              : 'bg-[var(--md-sys-color-surface-container)] border-transparent text-[var(--md-sys-color-on-surface-variant)]'
+                          }`}
+                        >
+                          <div className="text-xs font-bold">{item.label}</div>
+                          <div className="text-[10px] opacity-75">{item.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {/* Scrim Height Slider */}
+                    <div>
+                      <div className="flex justify-between text-xs text-zinc-400 mb-1 font-semibold">
+                        <label htmlFor="scrim-height-slider">Cover Height</label>
+                        <span>{style.scrimHeightPercent ?? 50}% of screen</span>
+                      </div>
+                      <input
+                        id="scrim-height-slider"
+                        type="range"
+                        min={20}
+                        max={100}
+                        step={5}
+                        value={style.scrimHeightPercent ?? 50}
+                        onChange={(e) => updateStyle('scrimHeightPercent', Number(e.target.value))}
+                        className="w-full accent-emerald-500 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Scrim Opacity Slider */}
+                    <div>
+                      <div className="flex justify-between text-xs text-zinc-400 mb-1 font-semibold">
+                        <label htmlFor="scrim-opacity-slider">Darkness / Opacity</label>
+                        <span>{Math.round((style.scrimOpacity ?? 0.75) * 100)}%</span>
+                      </div>
+                      <input
+                        id="scrim-opacity-slider"
+                        type="range"
+                        min={0.1}
+                        max={1.0}
+                        step={0.05}
+                        value={style.scrimOpacity ?? 0.75}
+                        onChange={(e) => updateStyle('scrimOpacity', Number(e.target.value))}
+                        className="w-full accent-emerald-500 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Boundary Softness / Feathering Slider */}
+                    <div>
+                      <div className="flex justify-between text-xs text-zinc-400 mb-1 font-semibold">
+                        <label htmlFor="scrim-feather-slider">Boundary Feathering</label>
+                        <span>{style.scrimFeatherPercent ?? 50}% soft fade</span>
+                      </div>
+                      <input
+                        id="scrim-feather-slider"
+                        type="range"
+                        min={10}
+                        max={100}
+                        step={5}
+                        value={style.scrimFeatherPercent ?? 50}
+                        onChange={(e) => updateStyle('scrimFeatherPercent', Number(e.target.value))}
+                        className="w-full accent-emerald-500 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Scrim Tint Color */}
+                    <div>
+                      <label htmlFor="scrim-color" className="block text-xs font-bold text-[var(--md-sys-color-on-surface)] mb-2">
+                        Scrim Color
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="scrim-color"
+                          type="color"
+                          value={style.scrimColor?.startsWith('#') ? style.scrimColor : '#000000'}
+                          onChange={(e) => updateStyle('scrimColor', e.target.value)}
+                          className="w-8 h-8 rounded border-2 border-[var(--md-sys-color-outline)] bg-transparent cursor-pointer p-0.5"
+                        />
+                        <span className="text-xs font-mono text-[var(--md-sys-color-on-surface-variant)]">
+                          {style.scrimColor || '#000000'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Feature 4: Gradient Text Color */}
