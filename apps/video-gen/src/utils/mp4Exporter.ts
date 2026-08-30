@@ -2,6 +2,7 @@ import * as Mp4Muxer from 'mp4-muxer';
 import type { ExportConfig, ExportStatus, LyricLine, MediaSequenceItem, StyleConfig } from '../types';
 import { QUALITY_CONFIGS } from '../types';
 import { renderLyricFrame } from './canvasRenderer';
+import { calculateSceneTransition, calculateVideoTime } from './videoSequencerEngine';
 
 /**
  * Finds the first supported VideoEncoderConfig for the target resolution and browser.
@@ -363,100 +364,48 @@ export async function exportLyricalVideoMP4(
 
     const timeSec = frameIdx / fps;
 
-    // Determine active background item for current timeSec (with seamless looping & fallback)
+    // Determine active background item for current timeSec using robust sequencer engine
     let activeFrameBg = bgMedia;
     let nextFrameBg = null;
     let transitionProgress = 0;
     let activeItemObj: MediaSequenceItem | null = null;
-    let activeItemAccTime = 0;
     let nextItemObj: MediaSequenceItem | null = null;
-    
-    if (mediaItems && mediaItems.length > 0) {
-      const totalSeqDuration = mediaItems.reduce((acc, item) => acc + item.durationSec, 0);
-      const loopedTime = totalSeqDuration > 0 ? timeSec % totalSeqDuration : timeSec;
+    let transitionType = style.sequenceTransitionType || 'crossfade';
 
-      let accumulatedTime = 0;
-      for (let i = 0; i < mediaItems.length; i++) {
-        const item = mediaItems[i];
-        const nextTime = accumulatedTime + item.durationSec;
-        if (loopedTime >= accumulatedTime && loopedTime <= nextTime) {
-          activeFrameBg = loadedSequenceMap.get(item.id) || bgMedia;
-          activeItemObj = item;
-          activeItemAccTime = accumulatedTime;
-          
-          const crossfadeDuration = style.sequenceCrossfadeDuration ?? 1.0;
-          if (crossfadeDuration > 0 && mediaItems.length > 1 && loopedTime > nextTime - crossfadeDuration) {
-            const nextItem = mediaItems[(i + 1) % mediaItems.length];
-            nextFrameBg = loadedSequenceMap.get(nextItem.id) || null;
-            nextItemObj = nextItem;
-            transitionProgress = Math.max(0, Math.min(1, (loopedTime - (nextTime - crossfadeDuration)) / crossfadeDuration));
-          }
-          break;
+    if (mediaItems && mediaItems.length > 0) {
+      const sceneInfo = calculateSceneTransition(
+        timeSec,
+        mediaItems,
+        style.sequenceTransitionDuration ?? style.sequenceCrossfadeDuration ?? 0.8,
+        style.sequenceTransitionType ?? 'crossfade'
+      );
+
+      if (sceneInfo) {
+        activeItemObj = sceneInfo.activeItem;
+        activeFrameBg = loadedSequenceMap.get(activeItemObj.id) || bgMedia;
+        transitionProgress = sceneInfo.transitionProgress;
+        transitionType = sceneInfo.transitionType;
+
+        if (sceneInfo.isInTransition && sceneInfo.nextItem) {
+          nextItemObj = sceneInfo.nextItem;
+          nextFrameBg = loadedSequenceMap.get(nextItemObj.id) || null;
         }
-        accumulatedTime = nextTime;
+
+        // Frame-accurate video seeking
+        if (activeFrameBg instanceof HTMLVideoElement && activeFrameBg.duration > 0) {
+          const targetTime = calculateVideoTime(activeItemObj, sceneInfo.timeInScene, activeFrameBg.duration);
+          await seekVideoToTime(activeFrameBg, targetTime);
+        }
+
+        if (nextFrameBg instanceof HTMLVideoElement && nextFrameBg.duration > 0 && nextItemObj) {
+          const nextTargetTime = calculateVideoTime(nextItemObj, transitionProgress * (nextItemObj.transitionDurationSec ?? 0.8), nextFrameBg.duration);
+          await seekVideoToTime(nextFrameBg, nextTargetTime);
+        }
       }
 
       if (!activeFrameBg && loadedSequenceMap.size > 0) {
         activeFrameBg = loadedSequenceMap.values().next().value;
       }
-    }
-
-    // Precise frame-accurate video seeking for directions, slow-motion, trimming & time-stretching
-    if (activeFrameBg instanceof HTMLVideoElement && activeFrameBg.duration > 0) {
-      const trimStart = Math.max(0, activeItemObj?.trimStartSec ?? 0);
-      const trimEnd = (activeItemObj?.trimEndSec && activeItemObj.trimEndSec > trimStart) ? Math.min(activeFrameBg.duration, activeItemObj.trimEndSec) : activeFrameBg.duration;
-      const clipSpan = Math.max(0.1, trimEnd - trimStart);
-      const direction = activeItemObj?.playbackDirection || 'forward';
-
-      let speed = activeItemObj?.playbackRate ?? (style.enableVideoSlowMotion ? (style.videoPlaybackRate ?? 0.5) : 1.0);
-      if (activeItemObj?.videoTimeStretchMode === 'auto-fit-duration' && activeItemObj?.durationSec > 0) {
-        speed = Math.min(2.0, Math.max(0.1, clipSpan / activeItemObj.durationSec));
-      } else if (activeItemObj?.videoTimeStretchMode === 'slow-motion') {
-        speed = activeItemObj?.playbackRate || 0.5;
-      }
-      const totalSeqDuration = mediaItems && mediaItems.length > 0 ? mediaItems.reduce((acc, item) => acc + item.durationSec, 0) : 0;
-      const loopedTime = totalSeqDuration > 0 ? timeSec % totalSeqDuration : timeSec;
-      const timeSinceClipStart = loopedTime - activeItemAccTime;
-      
-      let targetTime = trimStart;
-      if (direction === 'freeze-frame') {
-        targetTime = activeItemObj?.freezeFrameTimeSec !== undefined ? activeItemObj.freezeFrameTimeSec : trimStart;
-      } else if (direction === 'reverse') {
-        const progress = (timeSinceClipStart * speed) % clipSpan;
-        targetTime = trimEnd - progress;
-      } else if (direction === 'ping-pong') {
-        const cycle = (timeSinceClipStart * speed) % (clipSpan * 2);
-        if (cycle < clipSpan) {
-          targetTime = trimStart + cycle;
-        } else {
-          targetTime = trimEnd - (cycle - clipSpan);
-        }
-      } else {
-        const progress = (timeSinceClipStart * speed) % clipSpan;
-        targetTime = trimStart + progress;
-      }
-
-      await seekVideoToTime(activeFrameBg, targetTime);
-    }
-
-    if (nextFrameBg instanceof HTMLVideoElement && nextFrameBg.duration > 0) {
-      const nextTrimStart = Math.max(0, nextItemObj?.trimStartSec ?? 0);
-      const nextTrimEnd = (nextItemObj?.trimEndSec && nextItemObj.trimEndSec > nextTrimStart) ? Math.min(nextFrameBg.duration, nextItemObj.trimEndSec) : nextFrameBg.duration;
-      const nextClipSpan = Math.max(0.1, nextTrimEnd - nextTrimStart);
-      const nextSpeed = nextItemObj?.playbackRate ?? 1.0;
-      const nextDir = nextItemObj?.playbackDirection || 'forward';
-      
-      let nextTargetTime = nextTrimStart;
-      if (nextDir === 'freeze-frame') {
-        nextTargetTime = nextItemObj?.freezeFrameTimeSec !== undefined ? nextItemObj.freezeFrameTimeSec : nextTrimStart;
-      } else if (nextDir === 'reverse') {
-        const p = (transitionProgress * nextSpeed) % nextClipSpan;
-        nextTargetTime = nextTrimEnd - p;
-      } else {
-        nextTargetTime = nextTrimStart + ((transitionProgress * nextSpeed) % nextClipSpan);
-      }
-
-      await seekVideoToTime(nextFrameBg, nextTargetTime);
     }
 
     renderLyricFrame(
@@ -471,7 +420,8 @@ export async function exportLyricalVideoMP4(
       nextFrameBg,
       transitionProgress,
       activeItemObj?.transform,
-      nextItemObj?.transform
+      nextItemObj?.transform,
+      transitionType
     );
 
     const timestampMicroseconds = Math.round(timeSec * 1_000_000);

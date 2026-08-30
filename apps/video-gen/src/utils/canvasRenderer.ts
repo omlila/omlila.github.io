@@ -40,7 +40,8 @@ export function renderLyricFrame(
   nextBgElement?: HTMLImageElement | HTMLVideoElement | null,
   bgTransitionProgress?: number,
   bgTransform?: BackgroundTransformConfig,
-  nextBgTransform?: BackgroundTransformConfig
+  nextBgTransform?: BackgroundTransformConfig,
+  transitionType?: SceneTransitionType
 ) {
   ctx.save();
   ctx.clearRect(0, 0, width, height);
@@ -68,7 +69,7 @@ export function renderLyricFrame(
 
     ctx.save();
     if (globalAlpha < 1.0) {
-      ctx.globalAlpha = globalAlpha;
+      ctx.globalAlpha = Math.max(0, Math.min(1, globalAlpha));
     }
 
     // Ken Burns (Zoom / Pan) Motion Effect: Starts full-screen with overscan to eliminate edge gaps
@@ -108,12 +109,40 @@ export function renderLyricFrame(
     ctx.restore();
   };
 
-  // Only draw background media if explicit bgElement is provided,
-  // bypassing the static "image/video" backgroundType check to allow sequencer dominance.
+  // Draw background media with multi-type scene transition blending
+  const activeTransType = transitionType || style.sequenceTransitionType || 'crossfade';
+  const hasValidTransition = nextBgElement && bgTransitionProgress !== undefined && bgTransitionProgress > 0 && activeTransType !== 'instant-cut';
+
   if (bgElement) {
-    if (nextBgElement && bgTransitionProgress !== undefined && bgTransitionProgress > 0 && (style.sequenceCrossfadeDuration ?? 0) > 0) {
-      drawMediaLayer(bgElement, 1 - bgTransitionProgress, bgTransform);
-      drawMediaLayer(nextBgElement, bgTransitionProgress, nextBgTransform);
+    if (hasValidTransition) {
+      const p = Math.max(0, Math.min(1, bgTransitionProgress!));
+
+      if (activeTransType === 'fade-black') {
+        // Fade current out to pure black, then fade next in from black
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, width, height);
+        if (p < 0.5) {
+          const fadeOutAlpha = 1.0 - (p * 2);
+          drawMediaLayer(bgElement, fadeOutAlpha, bgTransform);
+        } else {
+          const fadeInAlpha = (p - 0.5) * 2;
+          drawMediaLayer(nextBgElement, fadeInAlpha, nextBgTransform);
+        }
+      } else if (activeTransType === 'blur-dissolve') {
+        // Smooth blur expansion during dissolve
+        const blurAmount = Math.sin(p * Math.PI) * 16;
+        ctx.save();
+        if (blurAmount > 0.5) {
+          ctx.filter = `blur(${blurAmount.toFixed(1)}px)`;
+        }
+        drawMediaLayer(bgElement, 1 - p, bgTransform);
+        drawMediaLayer(nextBgElement, p, nextBgTransform);
+        ctx.restore();
+      } else {
+        // Standard high-performance crossfade dissolve
+        drawMediaLayer(bgElement, 1 - p, bgTransform);
+        drawMediaLayer(nextBgElement, p, nextBgTransform);
+      }
     } else {
       drawMediaLayer(bgElement, 1.0, bgTransform);
     }
